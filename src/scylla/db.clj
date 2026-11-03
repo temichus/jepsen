@@ -137,8 +137,12 @@
                         (c/exec :nodetool :decommission))))))
 
 (def remove-timeout
-  "Seconds to wait for `nodetool remove` to return"
-  5)
+  "Seconds to wait for `nodetool remove`/`decommission`/`repair` to return.
+  Upstream used 5 s and let the command run on while the nemesis wiped the
+  node: with Raft topology that leaves a dead host id the coordinator never
+  forgets, and every later join or decommission is 'canceled because some
+  required nodes are dead'. So we wait for the operation to finish."
+  600)
 
 (defn remove-node!
   "Removes a single node, using `via` to execute the remove command. Node is
@@ -178,8 +182,10 @@
                   (fn [_ _]
                     (c/su
                       (info "Repairing" node)
+                      ; Plain `nodetool repair` skips tablet keyspaces
+                      ; ("Do not use nodetool repair for tablet keyspaces").
                       (try+ (c/exec :timeout remove-timeout
-                                    :nodetool :repair)
+                                    :nodetool :cluster :repair)
                             (catch [:exit 124] e
                               :timeout)))))
         node)])

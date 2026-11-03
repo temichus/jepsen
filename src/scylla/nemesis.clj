@@ -129,8 +129,12 @@
     {:type :info, :f :add-node, :value node}))
 
 (def max-removed-nodes
-  "Try not to remove/wipe more than this many nodes at once."
-  2)
+  "Try not to remove/wipe more than this many nodes at once. Raft group 0
+  needs a majority of voters: wiping 2 of 3 nodes (upstream's 2) left a
+  cluster nobody could rejoin.
+  ponytail: 1 is safe on 3 nodes; make it (quot (dec node-count) 2) when
+  the hunt moves to 5 nodes and wants two concurrent removals."
+  1)
 
 (defn removed-or-free-nodes
   "Returns the set of nodes which are known to be free or are in the process of
