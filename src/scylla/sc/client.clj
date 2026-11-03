@@ -141,6 +141,9 @@
   [& body]
   `(try+ ~@body
          (catch NoHostAvailableException e#
+           ; The client's only host is down: without a pause a key burns its
+           ; whole op budget in milliseconds.
+           (Thread/sleep 1000)
            (throw+ {:type       :no-host-available
                     :message    (.getMessage e#)
                     :definite?  true}))
@@ -188,16 +191,6 @@
          (catch [:type :qbits.alia/execute] e#
            (remap-errors-helper (throw (:cause ~'&throw-context))))))
 
-(defmacro slow-no-host-available
-  "Introduces artificial latency for NoHostAvailableExceptions, which
-  prevents us from performing a million no-op requests a second when the client
-  thinks every node is down."
-  [& body]
-  `(try ~@body
-        (catch NoHostAvailableException e#
-          (Thread/sleep 2000)
-          (throw e#))))
-
 (defn known-error?
   "For use in try+ catch expressions: is this thrown object one we generated?"
   [ex]
@@ -210,11 +203,10 @@
   #{:read})
 
 (defmacro with-errors
-  "Evaluates body for `op`, slowing no-host-available errors and remapping
-  errors to friendly ones. A known error yields op with :type :fail if it is
+  "Evaluates body for `op`, remapping errors to friendly ones. A known error yields op with :type :fail if it is
   definite or op is a read, else :info."
   [op & body]
-  `(try+ (remap-errors (slow-no-host-available ~@body))
+  `(try+ (remap-errors ~@body)
          (catch known-error? e#
            (assoc ~op
                   :type (if (or (idempotent-fs (:f ~op))
