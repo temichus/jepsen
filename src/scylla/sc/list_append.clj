@@ -13,7 +13,7 @@
             [jepsen.tests.cycle.append :as append]
             [scylla.sc [client :as c]
                        [db :as db]
-                       [wr-register :refer [empty-ok one-statement?]]]))
+                       [wr-register :refer [empty-ok one-statement? some-ok]]]))
 
 (def table (str db/keyspace ".lists"))
 
@@ -83,6 +83,7 @@
                   (->> (append/gen opts)
                        (gen/filter (comp one-statement? :value))
                        (gen/limit (+ 100 (rand-int 101))))))
-   :checker   (independent/checker
-                (empty-ok
-                  (append/checker {:consistency-models [:strict-serializable]})))})
+   :checker   (some-ok
+                (independent/checker
+                  (empty-ok
+                    (append/checker {:consistency-models [:strict-serializable]}))))})

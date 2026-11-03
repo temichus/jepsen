@@ -31,3 +31,12 @@
                          (wr/empty-ok (stub {:valid? false
                                              :anomaly-types [:G1c :empty-transaction-graph]}))
                          {} [] {})))))
+
+(deftest some-ok-test
+  ; Every partition vacuous: the run checked nothing.
+  (let [chk (wr/some-ok (stub {:valid? true}))]
+    (is (= :unknown (:valid? (checker/check
+                               chk {} [{:type :invoke :f :txn} {:type :fail :f :txn}
+                                       {:type :info :f :kill}] {}))))
+    (is (true? (:valid? (checker/check
+                          chk {} [{:type :invoke :f :txn} {:type :ok :f :txn}] {}))))))

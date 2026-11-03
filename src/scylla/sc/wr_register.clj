@@ -99,7 +99,8 @@
 (defn empty-ok
   "A partition whose whole life fell inside an outage has no ok txns; Elle
   calls that :unknown, which would hide every other partition's verdict.
-  It observed nothing, so it is valid."
+  It observed nothing, so it is valid, marked :vacuous?. some-ok keeps a
+  run where every partition is vacuous from passing."
   [chk]
   (reify checker/Checker
     (check [_ test history opts]
@@ -107,7 +108,18 @@
         (cond-> r
           (and (= :unknown (:valid? r))
                (= [:empty-transaction-graph] (seq (:anomaly-types r))))
-          (assoc :valid? true))))))
+          (assoc :valid? true :vacuous? true))))))
+
+(defn some-ok
+  "Wraps the run-level checker: a history without a single ok op checked
+  nothing, so it is :unknown, whatever the partitions say."
+  [chk]
+  (reify checker/Checker
+    (check [_ test history opts]
+      (let [r (checker/check chk test history opts)]
+        (if (some #(= :ok (:type %)) history)
+          r
+          (assoc r :valid? :unknown :error "no ok op in the whole history"))))))
 
 (defn workload
   "Options as scylla.core passes them: --key-count, --max-txn-length,
@@ -115,7 +127,8 @@
   [opts]
   {:client    (->Client (atom false) nil)
    :generator (generator opts)
-   :checker   (independent/checker
-                (empty-ok
-                  (wr/checker {:consistency-models [:strict-serializable]
-                               :linearizable-keys?  true})))})
+   :checker   (some-ok
+                (independent/checker
+                  (empty-ok
+                    (wr/checker {:consistency-models [:strict-serializable]
+                                 :linearizable-keys?  true}))))})
