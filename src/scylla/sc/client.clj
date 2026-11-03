@@ -20,6 +20,7 @@
                                                 OperationTimedOutException
                                                 ReadFailureException
                                                 ReadTimeoutException
+                                                ServerError
                                                 TransportException
                                                 UnavailableException
                                                 WriteFailureException
@@ -153,6 +154,11 @@
                     :definite?  true}))
          (catch ReadTimeoutException e#
            (throw+ {:type       :read-timeout
+                    :message    (.getMessage e#)
+                    :definite?  false}))
+         ; e.g. "unknown verb" while a restarted leader has no CQL yet (SCYLLADB-4722).
+         (catch ServerError e#
+           (throw+ {:type       :server-error
                     :message    (.getMessage e#)
                     :definite?  false}))
          (catch TransportException e#

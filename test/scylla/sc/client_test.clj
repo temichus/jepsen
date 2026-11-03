@@ -41,3 +41,10 @@
   (is (= {:consistency :quorum} (c/read-opts {})))
   (is (= {:consistency :quorum} (c/write-opts {})))
   (is (= {:consistency :one} (c/write-opts {:write-consistency :one}))))
+
+(deftest server-error-test
+  ; "unknown verb" (SCYLLADB-4722) must not crash the worker.
+  (let [e #(throw (com.datastax.driver.core.exceptions.ServerError.
+                    (java.net.InetSocketAddress. "127.0.0.1" 9042) "unknown verb"))]
+    (is (= :info (:type (c/with-errors {:f :write} (e)))))
+    (is (= :fail (:type (c/with-errors {:f :read} (e)))))))
