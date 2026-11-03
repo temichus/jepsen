@@ -281,6 +281,9 @@
     :parse-fn keyword
     :validate [consistency-levels (cli/one-of consistency-levels)]]
 
+   [nil "--[no-]sc" "Create the keyspace of the scylla.sc.* workloads as a Strong Consistency keyspace (consistency = 'global'). --no-sc gives the same keyspace eventually consistent, for canary runs."
+    :default true]
+
    [nil "--retry POLICY" "What kind of retry policy should we have the client use?"
     :default :default
     :parse-fn keyword
