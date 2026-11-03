@@ -1,5 +1,6 @@
 (ns scylla.sc.wr-register-test
   (:require [clojure.test :refer [deftest is]]
+            [jepsen.checker :as checker]
             [scylla.sc.wr-register :as wr]))
 
 (deftest txn-cql-test
@@ -16,3 +17,17 @@
   (is (wr/one-statement? [[:w 1 1] [:w 2 1]]))
   (is (not (wr/one-statement? [[:r 1 nil] [:w 2 1]])))
   (is (not (wr/one-statement? [[:w 1 1] [:w 1 2]]))))
+
+(defn stub [r]
+  (reify checker/Checker (check [_ _ _ _] r)))
+
+(deftest empty-ok-test
+  ; Elle's verdict for a partition whose txns all failed.
+  (is (true? (:valid? (checker/check
+                        (wr/empty-ok (stub {:valid? :unknown
+                                            :anomaly-types [:empty-transaction-graph]}))
+                        {} [] {}))))
+  (is (false? (:valid? (checker/check
+                         (wr/empty-ok (stub {:valid? false
+                                             :anomaly-types [:G1c :empty-transaction-graph]}))
+                         {} [] {})))))

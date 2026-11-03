@@ -10,7 +10,8 @@
   see. The same workload with --no-sc, CL ONE and partitions is the canary
   and must name an anomaly."
   (:require [clojure.string :as str]
-            [jepsen [client :as client]
+            [jepsen [checker :as checker]
+                    [client :as client]
                     [generator :as gen]
                     [independent :as independent]]
             [jepsen.tests.cycle.wr :as wr]
@@ -95,6 +96,18 @@
            (gen/filter (comp one-statement? :value))
            (gen/limit (+ 100 (rand-int 101)))))))
 
+(defn empty-ok
+  "A partition whose whole life fell inside an outage has no ok txns; Elle
+  calls that :unknown, which would hide every other partition's verdict.
+  It observed nothing, so it is valid."
+  [chk]
+  (reify checker/Checker
+    (check [_ test history opts]
+      (let [r (checker/check chk test history opts)]
+        (cond-> r
+          (= [:empty-transaction-graph] (seq (:anomaly-types r)))
+          (assoc :valid? true))))))
+
 (defn workload
   "Options as scylla.core passes them: --key-count, --max-txn-length,
   --max-writes-per-key. Partitions and keys are never reused."
@@ -102,5 +115,6 @@
   {:client    (->Client (atom false) nil)
    :generator (generator opts)
    :checker   (independent/checker
-                (wr/checker {:consistency-models [:strict-serializable]
-                             :linearizable-keys?  true}))})
+                (empty-ok
+                  (wr/checker {:consistency-models [:strict-serializable]
+                               :linearizable-keys?  true})))})
