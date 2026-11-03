@@ -65,7 +65,8 @@
   which we parse to something like {:status :up, :state :normal, :address ...}"
   [line]
   (when-let [[match status state address load tokens owns id rack]
-             (re-find #"^([UD\?])([NLJM\?])\s+(.+?)\s+(\?|.+? bytes|.+? \wB)\s+(\d+)\s+(.+?)\s+(.+?)\s+(.+?)$" line)]
+             ; Load is "598.11 KB" on old Scylla, "2.11 MiB" on current.
+             (re-find #"^([UD\?])([NLJM\?])\s+(.+?)\s+(\?|.+? bytes|.+? \w+B)\s+(\d+)\s+(.+?)\s+(.+?)\s+(.+?)$" line)]
     (let [status (case status
                    "?" :unknown
                    "U" :up
