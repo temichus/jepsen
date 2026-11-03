@@ -30,6 +30,7 @@
                     [write-isolation :as write-isolation]]
             [scylla.collections [map :as cmap]
                                 [set :as cset]]
+            [scylla.sc [db :as sc-db]]
             [qbits.commons.enum])
   (:import (com.datastax.driver.core ConsistencyLevel)))
 
@@ -152,7 +153,9 @@
   test map."
   [opts]
   (let [workload ((workloads (:workload opts)) opts)
-        db       (db/db (:version opts))
+        db       (if (:install-scylla opts)
+                   (db/db (:version opts))
+                   (sc-db/db))
         nemesis  (nemesis/package
                    {:db         db
                     :faults     (set (:nemesis opts))
@@ -218,7 +221,7 @@
     :parse-fn parse-long
     :validate [pos? "must be positive"]]
 
-   [nil "--[no-]install-scylla" "Install ScyllaDB during tests"
+   [nil "--[no-]install-scylla" "Install and configure ScyllaDB during tests. With --no-install-scylla the cluster is taken as it is: scylla.yaml and the data directory are never touched (scylla.sc.db)."
     :default true]
 
    [nil "--local-deb FILE" "If given, installs the local .deb file on top of the existing Scylla installation."]
