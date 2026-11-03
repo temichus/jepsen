@@ -47,4 +47,8 @@
   (let [e #(throw (com.datastax.driver.core.exceptions.ServerError.
                     (java.net.InetSocketAddress. "127.0.0.1" 9042) "unknown verb"))]
     (is (= :info (:type (c/with-errors {:f :write} (e)))))
-    (is (= :fail (:type (c/with-errors {:f :read} (e)))))))
+    (is (= :fail (:type (c/with-errors {:f :read} (e)))))
+    ; alia's wrapping takes the second remap path.
+    (is (= :info (:type (c/with-errors {:f :write}
+                          (try (e) (catch Exception x
+                                     (throw (ex-info "x" {:type :qbits.alia/execute} x))))))))))

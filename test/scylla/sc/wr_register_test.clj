@@ -25,7 +25,7 @@
   ; Elle's verdict for a partition whose txns all failed.
   (is (true? (:valid? (checker/check
                         (wr/empty-ok (stub {:valid? :unknown
-                                            :anomaly-types [:empty-transaction-graph]}))
+                                            :anomaly-types '(:empty-transaction-graph)}))
                         {} [] {}))))
   (is (false? (:valid? (checker/check
                          (wr/empty-ok (stub {:valid? false

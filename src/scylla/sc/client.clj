@@ -93,7 +93,11 @@
   [test node]
   (dt/with-retry [tries 20]
     (let [c (open test node)]
-      (alia/execute (:session c) "SELECT * FROM system.peers")
+      ; alia wraps driver exceptions in ex-info; rethrow the cause so the
+      ; catch below sees NoHostAvailableException.
+      (try (alia/execute (:session c) "SELECT * FROM system.peers")
+           (catch clojure.lang.ExceptionInfo e
+             (throw (or (ex-cause e) e))))
       c)
     (catch NoHostAvailableException e
       (when (zero? tries)

@@ -105,7 +105,8 @@
     (check [_ test history opts]
       (let [r (checker/check chk test history opts)]
         (cond-> r
-          (= [:empty-transaction-graph] (seq (:anomaly-types r)))
+          (and (= :unknown (:valid? r))
+               (= [:empty-transaction-graph] (seq (:anomaly-types r))))
           (assoc :valid? true))))))
 
 (defn workload
