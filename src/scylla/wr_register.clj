@@ -318,26 +318,3 @@
                     ; sequential or linearizable key constraints.
                     {:consistency-models [:serializable]})
                   opts))})
-
-; Patch a bug in Elle real quick--I've got it all torn open and don't want to
-; bump versions right now.
-(ns elle.rw-register)
-
-(defn cyclic-version-cases
-  "Given a map of version graphs, returns a sequence (or nil) of cycles in that
-  graph."
-  [version-graphs]
-  (seq
-    (reduce (fn [cases [k version-graph]]
-              (let [sccs (g/strongly-connected-components version-graph)]
-                (->> sccs
-                     (sort-by (partial reduce (fn option-compare [a b]
-                                                (cond (nil? a) b
-                                                      (nil? b) a
-                                                      true     (min a b)))))
-                     (map (fn [scc]
-                            {:key k
-                             :scc scc}))
-                     (into cases))))
-            []
-            version-graphs)))

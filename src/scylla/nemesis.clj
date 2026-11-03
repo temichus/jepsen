@@ -14,7 +14,8 @@
                                            pprint-str]]]
             [jepsen.nemesis [time :as nt]
                             [membership :as membership]
-                            [combined :as nc]]))
+                            [combined :as nc]]
+            [jepsen.nemesis.membership.state :as ms]))
 
 ; This code for periodically recovering isn't currently used, but might come in
 ; handy for exploring Scylla behavior going forward.
@@ -235,7 +236,11 @@
 ; `free` is a set of nodes we've removed from the cluster and destroyed data
 ; on.
 (defrecord MembershipState [db node-views view pending free faults]
-  membership/State
+  ms/State
+  (setup! [this test] this)
+
+  (teardown! [this test] this)
+
   (node-view [this test node]
     ; TODO: something is weird here. I think nodetool status might only return
     ; lines for SOME but not all of the cluster? Maybe? Maybe our parser is
