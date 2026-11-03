@@ -122,14 +122,16 @@
    (alia/execute session (statement query) opts)))
 
 (defn read-opts
-  "Alia options for a read: the test's --read-consistency, if any."
+  "Alia options for a read: the test's --read-consistency, else QUORUM."
   [test]
-  (if-let [c (:read-consistency test)] {:consistency c} {}))
+  {:consistency (:read-consistency test :quorum)})
 
 (defn write-opts
-  "Alia options for a write: the test's --write-consistency, if any."
+  "Alia options for a write: the test's --write-consistency, else QUORUM.
+  The driver default is LOCAL_ONE, which SC tables reject for writes
+  (\"Strongly consistent writes must use QUORUM/LOCAL_QUORUM\")."
   [test]
-  (if-let [c (:write-consistency test)] {:consistency c} {}))
+  {:consistency (:write-consistency test :quorum)})
 
 ;; Errors
 

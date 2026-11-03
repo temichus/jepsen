@@ -30,11 +30,15 @@
        " AND tablets = {'initial': 32}"))
 
 (defn create-keyspace!
-  "Creates the keyspace via `node`. DDL, so retried while the cluster settles."
+  "Drops and creates the keyspace via `node`, so every run starts with no
+  rows and with the consistency this run asked for (data outlives a test,
+  and IF NOT EXISTS would keep the previous run's SC or EC keyspace). DDL,
+  so retried while the cluster settles."
   [test node]
   (let [conn (sc/open test node)]
     (try (info "creating keyspace:" (create-keyspace-cql test))
          (sc/retry-each
+           (sc/execute (:session conn) (str "DROP KEYSPACE IF EXISTS " keyspace))
            (sc/execute (:session conn) (create-keyspace-cql test)))
          (finally (sc/close! conn)))))
 

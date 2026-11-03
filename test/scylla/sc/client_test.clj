@@ -36,3 +36,8 @@
              {:select :t :where [[= :k 1]]}]]
     (let [^Statement s (c/statement q)]
       (is (false? (.isIdempotent s)) (pr-str q)))))
+
+(deftest consistency-defaults-test
+  (is (= {:consistency :quorum} (c/read-opts {})))
+  (is (= {:consistency :quorum} (c/write-opts {})))
+  (is (= {:consistency :one} (c/write-opts {:write-consistency :one}))))

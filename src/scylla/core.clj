@@ -30,7 +30,8 @@
                     [write-isolation :as write-isolation]]
             [scylla.collections [map :as cmap]
                                 [set :as cset]]
-            [scylla.sc [db :as sc-db]]
+            [scylla.sc [db :as sc-db]
+                       [register :as sc-register]]
             [qbits.commons.enum])
   (:import (com.datastax.driver.core ConsistencyLevel)))
 
@@ -50,6 +51,7 @@
                        :client    client/noop
                        :checker   (checker/unbridled-optimism)})
    :cset            cset/workload
+   :sc-register     sc-register/workload
    :wr-register     wr-register/workload
    :write-isolation              write-isolation/workload
    :write-isolation-single-row   write-isolation/single-row-workload
