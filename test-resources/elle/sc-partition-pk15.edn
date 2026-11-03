@@ -1,0 +1,278 @@
+{:index 1, :time 1329759500, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 3, :time 1368512875, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n3" #{"n2" "n1"}, "n2" #{"n3"}, "n1" #{"n3"}}]}
+{:index 60, :time 4628902543, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 62, :time 4710402835, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 414, :time 22480382552, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 415, :time 22502694218, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 631, :time 34367568307, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 634, :time 34437094432, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 714, :time 38422258476, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 715, :time 38437248768, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n3" #{"n2" "n1"}, "n2" #{"n3"}, "n1" #{"n3"}}]}
+{:index 1074, :time 55703964859, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 1075, :time 55778801026, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 1139, :time 59235476361, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 1140, :time 59242188736, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 1528, :time 78574585078, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 1529, :time 78640221078, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 1798, :time 91649925667, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 1799, :time 91668625959, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 1943, :time 98808179837, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 1944, :time 98886763837, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 2045, :time 103769277590, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 2046, :time 103786928548, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 2201, :time 110963110259, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 2204, :time 111046887175, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 2438, :time 123454660306, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 2439, :time 123471229806, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 2725, :time 138019488396, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 2732, :time 138098019521, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 2873, :time 145486332733, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 2874, :time 145500678233, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n1" #{"n2" "n3"}, "n2" #{"n1"}, "n3" #{"n1"}}]}
+{:index 2931, :time 148974327734, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 2934, :time 149050841818, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 3096, :time 156643104280, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 3097, :time 156659282071, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n1" #{"n2" "n3"}, "n2" #{"n1"}, "n3" #{"n1"}}]}
+{:index 3506, :time 175716121914, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 3507, :time 175779284539, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 3693, :time 186055778752, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 3695, :time 186074617710, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n3" #{"n2" "n1"}, "n2" #{"n3"}, "n1" #{"n3"}}]}
+{:index 3964, :time 201834255425, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 3966, :time 201921008384, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 4128, :time 209412518429, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 4131, :time 209431682137, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n3" #{"n2" "n1"}, "n2" #{"n3"}, "n1" #{"n3"}}]}
+{:index 4379, :time 222352728352, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 4384, :time 222428235352, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 4576, :time 232691680439, :type :invoke, :process 195, :f :txn, :value [[:w 8 2]]}
+{:index 4577, :time 232699820523, :type :ok, :process 195, :f :txn, :value [[:w 8 2]]}
+{:index 4580, :time 232787122648, :type :invoke, :process 137, :f :txn, :value [[:r 8 nil] [:r 9 nil]]}
+{:index 4581, :time 232787826773, :type :ok, :process 137, :f :txn, :value [[:r 8 2] [:r 9 nil]]}
+{:index 4584, :time 233015401981, :type :invoke, :process 229, :f :txn, :value [[:w 6 2]]}
+{:index 4585, :time 233022530356, :type :ok, :process 229, :f :txn, :value [[:w 6 2]]}
+{:index 4588, :time 233165409773, :type :invoke, :process 195, :f :txn, :value [[:w 9 4]]}
+{:index 4589, :time 233169910023, :type :ok, :process 195, :f :txn, :value [[:w 9 4]]}
+{:index 4592, :time 233383246731, :type :invoke, :process 195, :f :txn, :value [[:r 9 nil]]}
+{:index 4593, :time 233384543481, :type :ok, :process 195, :f :txn, :value [[:r 9 4]]}
+{:index 4594, :time 233456650065, :type :invoke, :process 195, :f :txn, :value [[:w 8 8]]}
+{:index 4595, :time 233459973565, :type :ok, :process 195, :f :txn, :value [[:w 8 8]]}
+{:index 4596, :time 233510518648, :type :invoke, :process 195, :f :txn, :value [[:w 9 10] [:w 8 9] [:w 3 1]]}
+{:index 4597, :time 233514336232, :type :ok, :process 195, :f :txn, :value [[:w 9 10] [:w 8 9] [:w 3 1]]}
+{:index 4600, :time 233879965857, :type :invoke, :process 195, :f :txn, :value [[:w 9 11]]}
+{:index 4601, :time 233884197565, :type :ok, :process 195, :f :txn, :value [[:w 9 11]]}
+{:index 4602, :time 234033718523, :type :invoke, :process 195, :f :txn, :value [[:w 9 15] [:w 7 5]]}
+{:index 4603, :time 234040550773, :type :ok, :process 195, :f :txn, :value [[:w 9 15] [:w 7 5]]}
+{:index 4612, :time 234520942690, :type :invoke, :process 137, :f :txn, :value [[:r 6 nil] [:r 8 nil]]}
+{:index 4613, :time 234525967565, :type :ok, :process 137, :f :txn, :value [[:r 6 2] [:r 8 9]]}
+{:index 4620, :time 235035204649, :type :invoke, :process 195, :f :txn, :value [[:w 9 16]]}
+{:index 4621, :time 235041317816, :type :ok, :process 195, :f :txn, :value [[:w 9 16]]}
+{:index 4629, :time 235230640191, :type :invoke, :process 195, :f :txn, :value [[:r 8 nil]]}
+{:index 4630, :time 235233554232, :type :ok, :process 195, :f :txn, :value [[:r 8 9]]}
+{:index 4632, :time 235363532941, :type :invoke, :process 195, :f :txn, :value [[:r 9 nil] [:r 8 nil]]}
+{:index 4633, :time 235364922232, :type :ok, :process 195, :f :txn, :value [[:r 9 16] [:r 8 9]]}
+{:index 4634, :time 235474121232, :type :invoke, :process 195, :f :txn, :value [[:r 8 nil]]}
+{:index 4635, :time 235478332941, :type :ok, :process 195, :f :txn, :value [[:r 8 9]]}
+{:index 4636, :time 235616821441, :type :invoke, :process 195, :f :txn, :value [[:w 7 8]]}
+{:index 4637, :time 235619680816, :type :ok, :process 195, :f :txn, :value [[:w 7 8]]}
+{:index 4646, :time 236215280149, :type :invoke, :process 138, :f :txn, :value [[:w 8 15] [:w 9 30]]}
+{:index 4647, :time 236222819941, :type :ok, :process 138, :f :txn, :value [[:w 8 15] [:w 9 30]]}
+{:index 4662, :time 237144340275, :type :invoke, :process 195, :f :txn, :value [[:r 6 nil] [:r 9 nil]]}
+{:index 4663, :time 237148181358, :type :ok, :process 195, :f :txn, :value [[:r 6 2] [:r 9 30]]}
+{:index 4666, :time 237239836900, :type :invoke, :process 195, :f :txn, :value [[:r 5 nil]]}
+{:index 4667, :time 237243468358, :type :invoke, :process 211, :f :txn, :value [[:r 9 nil]]}
+{:index 4668, :time 237243945858, :type :ok, :process 195, :f :txn, :value [[:r 5 nil]]}
+{:index 4669, :time 237246107317, :type :ok, :process 211, :f :txn, :value [[:r 9 30]]}
+{:index 4678, :time 237949190900, :type :invoke, :process 138, :f :txn, :value [[:r 9 nil]]}
+{:index 4679, :time 237951106817, :type :ok, :process 138, :f :txn, :value [[:r 9 30]]}
+{:index 4684, :time 238188129942, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 4685, :time 238204810317, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n1" #{"n2" "n3"}, "n2" #{"n1"}, "n3" #{"n1"}}]}
+{:index 4692, :time 239004948276, :type :invoke, :process 195, :f :txn, :value [[:w 7 10]]}
+{:index 4697, :time 239365549443, :type :invoke, :process 211, :f :txn, :value [[:r 8 nil] [:r 9 nil] [:r 7 nil]]}
+{:index 4698, :time 239446029318, :type :invoke, :process 137, :f :txn, :value [[:w 8 19]]}
+{:index 4699, :time 239451182193, :type :ok, :process 137, :f :txn, :value [[:w 8 19]]}
+{:index 4701, :time 239529755443, :type :invoke, :process 137, :f :txn, :value [[:r 8 nil]]}
+{:index 4702, :time 239533156318, :type :ok, :process 137, :f :txn, :value [[:r 8 19]]}
+{:index 4706, :time 239748576401, :type :invoke, :process 137, :f :txn, :value [[:w 9 43]]}
+{:index 4707, :time 239754567318, :type :ok, :process 137, :f :txn, :value [[:w 9 43]]}
+{:index 4714, :time 240385807110, :type :invoke, :process 137, :f :txn, :value [[:w 9 52]]}
+{:index 4715, :time 240392254901, :type :ok, :process 137, :f :txn, :value [[:w 9 52]]}
+{:index 4716, :time 240471623652, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4717, :time 240475147777, :type :ok, :process 137, :f :txn, :value [[:r 9 52]]}
+{:index 4718, :time 240571972568, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4719, :time 240574115277, :type :ok, :process 137, :f :txn, :value [[:r 9 52]]}
+{:index 4723, :time 240940684027, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4724, :time 240948433610, :type :ok, :process 137, :f :txn, :value [[:r 9 52]]}
+{:index 4725, :time 241006929110, :type :info, :process 195, :f :txn, :value [[:w 7 10]], :error {:type :write-timeout, :definite? false, :message "Cassandra timeout during SIMPLE write query at consistency ONE (0 replica were required but only 0 acknowledged the write)"}}
+{:index 4726, :time 241053299860, :type :invoke, :process 210, :f :txn, :value [[:w 8 25]]}
+{:index 4727, :time 241061770027, :type :invoke, :process 137, :f :txn, :value [[:r 7 nil] [:r 9 nil]]}
+{:index 4728, :time 241063273485, :type :ok, :process 137, :f :txn, :value [[:r 7 8] [:r 9 52]]}
+{:index 4732, :time 241241145110, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4734, :time 241243620319, :type :ok, :process 137, :f :txn, :value [[:r 9 52]]}
+{:index 4735, :time 241320143235, :type :invoke, :process 137, :f :txn, :value [[:w 9 65]]}
+{:index 4736, :time 241326353277, :type :ok, :process 137, :f :txn, :value [[:w 9 65]]}
+{:index 4750, :time 242166816861, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4751, :time 242169600777, :type :ok, :process 137, :f :txn, :value [[:r 9 65]]}
+{:index 4764, :time 242809862736, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 4767, :time 242892967778, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 4768, :time 242981447403, :type :invoke, :process 137, :f :txn, :value [[:w 9 75]]}
+{:index 4769, :time 242984221861, :type :ok, :process 137, :f :txn, :value [[:w 9 75]]}
+{:index 4770, :time 243054987028, :type :info, :process 210, :f :txn, :value [[:w 8 25]], :error {:type :write-timeout, :definite? false, :message "Cassandra timeout during SIMPLE write query at consistency ONE (0 replica were required but only 0 acknowledged the write)"}}
+{:index 4773, :time 243298409445, :type :invoke, :process 229, :f :txn, :value [[:r 9 nil]]}
+{:index 4776, :time 243454222070, :type :invoke, :process 225, :f :txn, :value [[:r 7 nil]]}
+{:index 4780, :time 243562971070, :type :invoke, :process 137, :f :txn, :value [[:r 9 nil]]}
+{:index 4781, :time 243566012861, :type :ok, :process 137, :f :txn, :value [[:r 9 75]]}
+{:index 4789, :time 244230124862, :type :invoke, :process 137, :f :txn, :value [[:r 8 nil] [:r 9 nil]]}
+{:index 4790, :time 244232012237, :type :ok, :process 137, :f :txn, :value [[:r 8 19] [:r 9 75]]}
+{:index 4793, :time 244369146028, :type :info, :process 211, :f :txn, :value [[:r 8 nil] [:r 9 nil] [:r 7 nil]], :error {:type :read-timeout, :definite? false, :message "Cassandra timeout during read query at consistency ONE (the replica queried for data didn't respond)"}}
+{:index 4805, :time 244935106570, :type :invoke, :process 226, :f :txn, :value [[:r 7 nil]]}
+{:index 4808, :time 245035178320, :type :invoke, :process 137, :f :txn, :value [[:r 8 nil] [:r 7 nil] [:r 9 nil]]}
+{:index 4809, :time 245037326612, :type :ok, :process 137, :f :txn, :value [[:r 8 19] [:r 7 8] [:r 9 75]]}
+{:index 4818, :time 245606733029, :type :ok, :process 225, :f :txn, :value [[:r 7 10]]}
+{:index 4819, :time 245697213779, :type :invoke, :process 225, :f :txn, :value [[:w 5 11]]}
+{:index 4823, :time 245797224362, :type :ok, :process 225, :f :txn, :value [[:w 5 11]]}
+{:index 4826, :time 245905842196, :type :invoke, :process 225, :f :txn, :value [[:r 9 nil]]}
+{:index 4827, :time 245909321904, :type :ok, :process 225, :f :txn, :value [[:r 9 75]]}
+{:index 4828, :time 245992180237, :type :ok, :process 226, :f :txn, :value [[:r 7 10]]}
+{:index 4829, :time 245992322321, :type :ok, :process 229, :f :txn, :value [[:r 9 75]]}
+{:index 4832, :time 246123310196, :type :invoke, :process 225, :f :txn, :value [[:w 9 101]]}
+{:index 4833, :time 246128226446, :type :ok, :process 225, :f :txn, :value [[:w 9 101]]}
+{:index 4834, :time 246301269404, :type :invoke, :process 226, :f :txn, :value [[:r 6 nil] [:r 9 nil]]}
+{:index 4835, :time 246307105154, :type :ok, :process 226, :f :txn, :value [[:r 6 2] [:r 9 101]]}
+{:index 4844, :time 246819117696, :type :invoke, :process 225, :f :txn, :value [[:w 9 103]]}
+{:index 4845, :time 246826124780, :type :ok, :process 225, :f :txn, :value [[:w 9 103]]}
+{:index 4846, :time 246862701738, :type :invoke, :process 225, :f :txn, :value [[:r 7 nil]]}
+{:index 4847, :time 246863924113, :type :ok, :process 225, :f :txn, :value [[:r 7 10]]}
+{:index 4848, :time 246974171071, :type :invoke, :process 225, :f :txn, :value [[:r 8 nil]]}
+{:index 4849, :time 246977216821, :type :ok, :process 225, :f :txn, :value [[:r 8 25]]}
+{:index 4850, :time 247135889863, :type :invoke, :process 225, :f :txn, :value [[:w 7 32]]}
+{:index 4851, :time 247144340280, :type :ok, :process 225, :f :txn, :value [[:w 7 32]]}
+{:index 4852, :time 247251339613, :type :invoke, :process 225, :f :txn, :value [[:r 7 nil]]}
+{:index 4853, :time 247253256988, :type :ok, :process 225, :f :txn, :value [[:r 7 32]]}
+{:index 4854, :time 247271519321, :type :invoke, :process 225, :f :txn, :value [[:w 8 55] [:w 6 22]]}
+{:index 4855, :time 247274417613, :type :ok, :process 225, :f :txn, :value [[:w 8 55] [:w 6 22]]}
+{:index 4858, :time 247428937488, :type :invoke, :process 225, :f :txn, :value [[:r 6 nil]]}
+{:index 4859, :time 247433111488, :type :ok, :process 225, :f :txn, :value [[:r 6 22]]}
+{:index 4861, :time 247564200780, :type :invoke, :process 225, :f :txn, :value [[:w 7 36]]}
+{:index 4863, :time 247569344905, :type :ok, :process 225, :f :txn, :value [[:w 7 36]]}
+{:index 4874, :time 248092511905, :type :invoke, :process 225, :f :txn, :value [[:w 7 37]]}
+{:index 4875, :time 248098916113, :type :ok, :process 225, :f :txn, :value [[:w 7 37]]}
+{:index 4884, :time 248569769780, :type :invoke, :process 225, :f :txn, :value [[:w 5 16] [:w 10 6]]}
+{:index 4885, :time 248576200322, :type :ok, :process 225, :f :txn, :value [[:w 5 16] [:w 10 6]]}
+{:index 4898, :time 249358209697, :type :invoke, :process 226, :f :txn, :value [[:w 6 27] [:w 3 3] [:w 10 7] [:w 8 64]]}
+{:index 4899, :time 249362287447, :type :ok, :process 226, :f :txn, :value [[:w 6 27] [:w 3 3] [:w 10 7] [:w 8 64]]}
+{:index 4900, :time 249398323072, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 4901, :time 249415352072, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}
+{:index 4908, :time 249715045656, :type :invoke, :process 225, :f :txn, :value [[:r 7 nil]]}
+{:index 4909, :time 249718656948, :type :ok, :process 225, :f :txn, :value [[:r 7 37]]}
+{:index 4913, :time 250033178989, :type :invoke, :process 225, :f :txn, :value [[:r 7 nil]]}
+{:index 4914, :time 250035574489, :type :ok, :process 225, :f :txn, :value [[:r 7 37]]}
+{:index 4915, :time 250163951281, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4916, :time 250168238573, :type :ok, :process 225, :f :txn, :value [[:r 10 7]]}
+{:index 4933, :time 251149006490, :type :invoke, :process 138, :f :txn, :value [[:r 8 nil]]}
+{:index 4934, :time 251150267365, :type :ok, :process 138, :f :txn, :value [[:r 8 64]]}
+{:index 4936, :time 251323966365, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4938, :time 251324729240, :type :ok, :process 225, :f :txn, :value [[:r 10 7]]}
+{:index 4941, :time 251418712615, :type :invoke, :process 225, :f :txn, :value [[:w 10 26]]}
+{:index 4942, :time 251420738532, :type :ok, :process 225, :f :txn, :value [[:w 10 26]]}
+{:index 4944, :time 251559491698, :type :invoke, :process 225, :f :txn, :value [[:w 10 27]]}
+{:index 4945, :time 251565903282, :type :ok, :process 225, :f :txn, :value [[:w 10 27]]}
+{:index 4946, :time 251723788615, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4947, :time 251726607240, :type :ok, :process 225, :f :txn, :value [[:r 10 27]]}
+{:index 4948, :time 251888423449, :type :invoke, :process 225, :f :txn, :value [[:r 8 nil]]}
+{:index 4949, :time 251892702699, :type :ok, :process 225, :f :txn, :value [[:r 8 64]]}
+{:index 4950, :time 251893621282, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4951, :time 251896398657, :type :ok, :process 225, :f :txn, :value [[:r 10 27]]}
+{:index 4952, :time 252019714907, :type :invoke, :process 225, :f :txn, :value [[:w 10 35]]}
+{:index 4953, :time 252024462824, :type :ok, :process 225, :f :txn, :value [[:w 10 35]]}
+{:index 4954, :time 252063115740, :type :invoke, :process 225, :f :txn, :value [[:w 10 37]]}
+{:index 4955, :time 252065808282, :type :ok, :process 225, :f :txn, :value [[:w 10 37]]}
+{:index 4956, :time 252167114615, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil] [:r 4 nil]]}
+{:index 4957, :time 252170503282, :type :ok, :process 225, :f :txn, :value [[:r 10 37] [:r 4 nil]]}
+{:index 4959, :time 252453509991, :type :invoke, :process 225, :f :txn, :value [[:w 7 47]]}
+{:index 4960, :time 252458168282, :type :ok, :process 225, :f :txn, :value [[:w 7 47]]}
+{:index 4961, :time 252588353741, :type :invoke, :process 226, :f :txn, :value [[:r 10 nil]]}
+{:index 4962, :time 252661124199, :type :invoke, :process 137, :f :txn, :value [[:r 7 nil] [:r 8 nil] [:r 10 nil]]}
+{:index 4963, :time 252662365407, :type :ok, :process 137, :f :txn, :value [[:r 7 47] [:r 8 64] [:r 10 37]]}
+{:index 4964, :time 252755694491, :type :invoke, :process 138, :f :txn, :value [[:w 10 44]]}
+{:index 4965, :time 252758480574, :type :ok, :process 138, :f :txn, :value [[:w 10 44]]}
+{:index 4972, :time 253255422616, :type :invoke, :process 225, :f :txn, :value [[:w 8 84] [:w 7 48]]}
+{:index 4973, :time 253260450283, :type :ok, :process 225, :f :txn, :value [[:w 8 84] [:w 7 48]]}
+{:index 4974, :time 253291225033, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4975, :time 253292352949, :type :ok, :process 225, :f :txn, :value [[:r 10 44]]}
+{:index 4976, :time 253440016574, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 4977, :time 253441526366, :type :ok, :process 225, :f :txn, :value [[:r 10 44]]}
+{:index 4986, :time 253717441741, :type :invoke, :process 225, :f :txn, :value [[:w 10 51] [:w 7 51]]}
+{:index 4987, :time 253721735741, :type :ok, :process 225, :f :txn, :value [[:w 10 51] [:w 7 51]]}
+{:index 5000, :time 254263312741, :type :invoke, :process 225, :f :txn, :value [[:r 4 nil] [:r 10 nil]]}
+{:index 5001, :time 254266877991, :type :ok, :process 225, :f :txn, :value [[:r 4 nil] [:r 10 51]]}
+{:index 5010, :time 254734072408, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 5011, :time 254738517575, :type :ok, :process 225, :f :txn, :value [[:r 10 51]]}
+{:index 5017, :time 254964000783, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 5020, :time 255046775408, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 5025, :time 255259283159, :type :invoke, :process 137, :f :txn, :value [[:r 10 nil] [:r 4 nil]]}
+{:index 5026, :time 255263066492, :type :ok, :process 137, :f :txn, :value [[:r 10 51] [:r 4 nil]]}
+{:index 5038, :time 256114793451, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil] [:r 7 nil]]}
+{:index 5040, :time 256118785867, :type :ok, :process 225, :f :txn, :value [[:r 10 51] [:r 7 51]]}
+{:index 5045, :time 256168601451, :type :ok, :process 226, :f :txn, :value [[:r 10 51]]}
+{:index 5056, :time 256538871618, :type :invoke, :process 225, :f :txn, :value [[:r 8 nil]]}
+{:index 5057, :time 256540553409, :type :ok, :process 225, :f :txn, :value [[:r 8 84]]}
+{:index 5058, :time 256596519159, :type :invoke, :process 226, :f :txn, :value [[:r 8 nil]]}
+{:index 5059, :time 256599170701, :type :ok, :process 226, :f :txn, :value [[:r 8 84]]}
+{:index 5074, :time 257398755409, :type :invoke, :process 225, :f :txn, :value [[:w 3 4]]}
+{:index 5075, :time 257403091700, :type :ok, :process 225, :f :txn, :value [[:w 3 4]]}
+{:index 5076, :time 257545585284, :type :invoke, :process 225, :f :txn, :value [[:r 8 nil] [:r 7 nil]]}
+{:index 5077, :time 257547218117, :type :ok, :process 225, :f :txn, :value [[:r 8 84] [:r 7 51]]}
+{:index 5080, :time 257731493075, :type :invoke, :process 225, :f :txn, :value [[:w 10 82]]}
+{:index 5081, :time 257732685784, :type :ok, :process 225, :f :txn, :value [[:w 10 82]]}
+{:index 5084, :time 257987365867, :type :invoke, :process 225, :f :txn, :value [[:w 7 60]]}
+{:index 5085, :time 257993235701, :type :ok, :process 225, :f :txn, :value [[:w 7 60]]}
+{:index 5088, :time 258245118201, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil]]}
+{:index 5089, :time 258249486951, :type :ok, :process 225, :f :txn, :value [[:r 10 82]]}
+{:index 5100, :time 258714977534, :type :invoke, :process 225, :f :txn, :value [[:r 10 nil] [:r 7 nil]]}
+{:index 5101, :time 258719709243, :type :ok, :process 225, :f :txn, :value [[:r 10 82] [:r 7 60]]}
+{:index 5102, :time 258814668409, :type :invoke, :process 225, :f :txn, :value [[:w 7 63] [:w 8 116]]}
+{:index 5103, :time 258819415368, :type :ok, :process 225, :f :txn, :value [[:w 7 63] [:w 8 116]]}
+{:index 5104, :time 258855759868, :type :invoke, :process 225, :f :txn, :value [[:w 8 120]]}
+{:index 5105, :time 258860362409, :type :ok, :process 225, :f :txn, :value [[:w 8 120]]}
+{:index 5106, :time 258915879243, :type :invoke, :process 225, :f :txn, :value [[:w 10 100]]}
+{:index 5107, :time 258921180743, :type :ok, :process 225, :f :txn, :value [[:w 10 100]]}
+{:index 5110, :time 259029278826, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 5111, :time 259048092534, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n1" #{"n2" "n3"}, "n2" #{"n1"}, "n3" #{"n1"}}]}
+{:index 5115, :time 259365480285, :type :invoke, :process 225, :f :txn, :value [[:w 10 102]]}
+{:index 5128, :time 260282580118, :type :invoke, :process 226, :f :txn, :value [[:r 10 nil]]}
+{:index 5129, :time 260286736202, :type :ok, :process 226, :f :txn, :value [[:r 10 100]]}
+{:index 5130, :time 260447499702, :type :invoke, :process 226, :f :txn, :value [[:r 8 nil] [:r 10 nil]]}
+{:index 5131, :time 260451545160, :type :ok, :process 226, :f :txn, :value [[:r 8 120] [:r 10 100]]}
+{:index 5132, :time 260544945035, :type :invoke, :process 226, :f :txn, :value [[:w 7 66]]}
+{:index 5133, :time 260547673868, :type :ok, :process 226, :f :txn, :value [[:w 7 66]]}
+{:index 5140, :time 261203452285, :type :invoke, :process 226, :f :txn, :value [[:w 10 106]]}
+{:index 5141, :time 261210374202, :type :ok, :process 226, :f :txn, :value [[:w 10 106]]}
+{:index 5142, :time 261369133494, :type :info, :process 225, :f :txn, :value [[:w 10 102]], :error {:type :write-timeout, :definite? false, :message "Cassandra timeout during SIMPLE write query at consistency ONE (0 replica were required but only 0 acknowledged the write)"}}
+{:index 5147, :time 261498430411, :type :invoke, :process 240, :f :txn, :value [[:r 6 nil]]}
+{:index 5148, :time 261505643452, :type :invoke, :process 226, :f :txn, :value [[:w 11 2]]}
+{:index 5149, :time 261509163619, :type :ok, :process 226, :f :txn, :value [[:w 11 2]]}
+{:index 5150, :time 261552389619, :type :invoke, :process 226, :f :txn, :value [[:w 11 3]]}
+{:index 5151, :time 261561964161, :type :ok, :process 226, :f :txn, :value [[:w 11 3]]}
+{:index 5158, :time 261906708744, :type :invoke, :process 229, :f :txn, :value [[:r 10 nil]]}
+{:index 5159, :time 261911133911, :type :ok, :process 229, :f :txn, :value [[:r 10 106]]}
+{:index 5160, :time 261970658369, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 5163, :time 262054769911, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 5166, :time 262285259203, :type :invoke, :process 226, :f :txn, :value [[:w 10 117]]}
+{:index 5167, :time 262290057286, :type :ok, :process 226, :f :txn, :value [[:w 10 117]]}
+{:index 5168, :time 262405743494, :type :invoke, :process 226, :f :txn, :value [[:w 11 9]]}
+{:index 5169, :time 262408981411, :type :ok, :process 226, :f :txn, :value [[:w 11 9]]}
+{:index 5170, :time 262438926619, :type :ok, :process 240, :f :txn, :value [[:r 6 27]]}
+{:index 5174, :time 262596468786, :type :invoke, :process 240, :f :txn, :value [[:w 11 10]]}
+{:index 5175, :time 262604685411, :type :ok, :process 240, :f :txn, :value [[:w 11 10]]}
+{:index 5184, :time 263231726870, :type :invoke, :process 240, :f :txn, :value [[:r 6 nil]]}
+{:index 5185, :time 263235020453, :type :ok, :process 240, :f :txn, :value [[:r 6 27]]}
+{:index 5192, :time 263523227412, :type :invoke, :process 229, :f :txn, :value [[:w 5 22]]}
+{:index 5193, :time 263530100370, :type :ok, :process 229, :f :txn, :value [[:w 5 22]]}
+{:index 5194, :time 263665292828, :type :invoke, :process 240, :f :txn, :value [[:r 3 nil] [:r 10 nil]]}
+{:index 5195, :time 263667113578, :type :ok, :process 240, :f :txn, :value [[:r 3 4] [:r 10 102]]}
+{:index 5198, :time 263785146912, :type :invoke, :process 240, :f :txn, :value [[:r 10 nil]]}
+{:index 5199, :time 263786437078, :type :ok, :process 240, :f :txn, :value [[:r 10 102]]}
+{:index 5380, :time 272974419291, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 5381, :time 272985273416, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n1" #{"n2" "n3"}, "n2" #{"n1"}, "n3" #{"n1"}}]}
+{:index 5690, :time 288247666756, :type :info, :process :nemesis, :f :stop-partition, :value nil}
+{:index 5691, :time 288338610423, :type :info, :process :nemesis, :f :stop-partition, :value :network-healed}
+{:index 5746, :time 290316496424, :type :info, :process :nemesis, :f :start-partition, :value :majority}
+{:index 5747, :time 290331913507, :type :info, :process :nemesis, :f :start-partition, :value [:isolated {"n2" #{"n1" "n3"}, "n1" #{"n2"}, "n3" #{"n2"}}]}

@@ -17,6 +17,7 @@
                  [com.codahale.metrics/metrics-core "3.0.2"]
                  [com.scylladb/scylla-driver-core "3.7.1-scylla-2"]]
   :main scylla.core
+  :profiles {:test {:resource-paths ["test-resources"]}}
   :jvm-opts ["-Djava.awt.headless=true"
              "-Xmx6g"
              "-server"]

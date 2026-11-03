@@ -15,7 +15,9 @@
                     [independent :as independent]]
             [jepsen.tests.cycle.wr :as wr]
             [scylla.sc [client :as c]
-                       [db :as db]]))
+                       [db :as db]
+                       ; Loaded for its side effect: fixes Elle's checker.
+                       [elle-patch]]))
 
 (def table (str db/keyspace ".wr_registers"))
 
