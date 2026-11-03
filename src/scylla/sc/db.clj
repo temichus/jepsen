@@ -10,9 +10,8 @@
                     [db :as db]
                     [util :as util :refer [meh]]]
             [jepsen.control.util :as cu]
-            [qbits.alia :as alia]
-            [scylla [client :as sc]
-                    [db :as sdb]]
+            [scylla [db :as sdb]]
+            [scylla.sc [client :as sc]]
             [slingshot.slingshot :refer [try+]]))
 
 (def keyspace
@@ -36,7 +35,7 @@
   (let [conn (sc/open test node)]
     (try (info "creating keyspace:" (create-keyspace-cql test))
          (sc/retry-each
-           (alia/execute (:session conn) (create-keyspace-cql test)))
+           (sc/execute (:session conn) (create-keyspace-cql test)))
          (finally (sc/close! conn)))))
 
 (def log-file
