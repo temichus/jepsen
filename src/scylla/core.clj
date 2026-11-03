@@ -30,7 +30,9 @@
                     [write-isolation :as write-isolation]]
             [scylla.collections [map :as cmap]
                                 [set :as cset]]
-            [scylla.sc [db :as sc-db]
+            [scylla.sc [batch-isolation :as sc-batch-isolation]
+                       [db :as sc-db]
+                       [list-append :as sc-list-append]
                        [register :as sc-register]
                        [wr-register :as sc-wr-register]]
             [qbits.commons.enum])
@@ -52,6 +54,8 @@
                        :client    client/noop
                        :checker   (checker/unbridled-optimism)})
    :cset            cset/workload
+   :sc-batch-isolation sc-batch-isolation/workload
+   :sc-list-append  sc-list-append/workload
    :sc-register     sc-register/workload
    :sc-wr-register  sc-wr-register/workload
    :wr-register     wr-register/workload
@@ -69,6 +73,15 @@
    :write-isolation
    :list-append
    :wr-register])
+
+(def sc-workloads
+  "The Strong Consistency workloads test-all-sc runs. No bank: a transfer is
+  a read-modify-write that needs CAS or a counter to be atomic, and SC
+  rejects both (see README)."
+  [:sc-register
+   :sc-wr-register
+   :sc-list-append
+   :sc-batch-isolation])
 
 (def nemeses
   "Types of faults a nemesis can create."
@@ -322,17 +335,30 @@
   combining all workloads and nemeses."
   [opts]
   (let [nemeses     (if-let [n (:nemesis opts)]  [n] standard-nemeses)
-        workloads   (if-let [w (:workload opts)] [w] standard-workloads)
+        workloads   (let [w (:workload opts)]
+                      (cond (nil? w)        standard-workloads
+                            (sequential? w) w
+                            true            [w]))
         counts      (range (:test-count opts))]
     (->> (for [i counts, n nemeses, w workloads]
            (assoc opts :nemesis n :workload w))
          (map scylla-test))))
+
+(defn all-sc-tests
+  "all-tests over the SC workloads: `test-all-sc`. --no-install-scylla and
+  --sc are what SCT passes; a workload or nemesis given on the CLI narrows
+  the matrix as in test-all."
+  [opts]
+  (all-tests (update opts :workload #(or % sc-workloads))))
 
 (defn -main
   "Handles CLI args."
   [& args]
   (cli/run! (merge (cli/test-all-cmd {:tests-fn all-tests
                                       :opt-spec cli-opts})
+                   (set/rename-keys (cli/test-all-cmd {:tests-fn all-sc-tests
+                                                       :opt-spec cli-opts})
+                                    {"test-all" "test-all-sc"})
                    (cli/single-test-cmd {:test-fn  scylla-test
                                          :opt-spec cli-opts})
                    (cli/serve-cmd))

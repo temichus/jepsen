@@ -48,6 +48,20 @@ browsing the `store` directory.
 Most tests are tunable with command line options. See `lein run test --help`
 for a full list of options.
 
+## Strong Consistency workloads
+
+`lein run test-all-sc --no-install-scylla ...` runs the `scylla.sc.*` workloads
+(`sc-register`, `sc-wr-register`, `sc-list-append`, `sc-batch-isolation`) against a
+cluster somebody else provisioned, on a keyspace created with `consistency = 'global'`
+(`--no-sc` makes it eventually consistent: the canary, which must fail). Every write is sent
+once and a timed-out write stays `:info`; see `scylla.sc.client`.
+
+There is no bank workload. A bank transfer is a read-modify-write that is atomic only with
+compare-and-set or a counter, and Strong Consistency tables reject both (LWT `IF` and counter
+columns), while `SET v = v - ?` exists for counters only. On a correct SC cluster two
+concurrent transfers lose an update and the invariant breaks, so the test could not tell a bug
+from the model.
+
 ## Running Tests in Docker
 
 A Docker container preconfigured to run Jepsen tests is available at `tjake/jepsen` on [Docker Hub](https://hub.docker.com/r/tjake/jepsen). Since it runs Docker inside Docker, it must be run with the privileged flag. A command like `docker run -it --privileged -v /home/jkni/git:/jkni-git tjake/jepsen` will start the container and attach to it as an interactive shell. Since you'll likely be running a newer version of Jepsen/C* tests than those available in the image, you'll want to share the directory containing your local Jepsen/C* clone with the container as in the example above.
