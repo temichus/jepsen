@@ -86,7 +86,7 @@
     (kill! [_ test node]
       (info node "killing ScyllaDB")
       (c/su
-        (cu/grepkill! "scylla")
+        (cu/grepkill! "/usr/bin/scylla")
         (try+ (c/exec :service :scylla-server :stop)
               (catch [:exit 1] e)
               (catch [:exit 5] e))))
