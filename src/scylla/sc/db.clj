@@ -1,7 +1,8 @@
 (ns scylla.sc.db
   "A DB for clusters somebody else installed and configured: SCT, or the
-  local Docker nodes. It never writes scylla.yaml and never deletes data; it
-  only starts, stops, kills and pauses Scylla, and knows where the log is.
+  local Docker nodes. It never writes scylla.yaml and deletes data only of a
+  node the membership nemesis left decommissioned; otherwise it only starts,
+  stops, kills and pauses Scylla, and knows where the log is.
 
   Selected by --no-install-scylla (scylla.core). scylla.db stays for runs
   that install and re-form the cluster themselves."
@@ -12,7 +13,7 @@
             [jepsen.control.util :as cu]
             [scylla [db :as sdb]]
             [scylla.sc [client :as sc]]
-            [slingshot.slingshot :refer [try+]]))
+            [slingshot.slingshot :refer [try+ throw+]]))
 
 (def keyspace
   "The keyspace every scylla.sc.* workload creates its tables in."
@@ -57,7 +58,17 @@
       ; First boot of a fresh cluster must be one node at a time.
       (sdb/wait-for-previous test node)
       (let [t1 (util/linear-time-nanos)]
-        (db/start! this test node)
+        (try+ (db/start! this test node)
+              (catch [:exit 1] _
+                ; The membership nemesis can end a test with a node
+                ; decommissioned; Scylla only lets it rejoin with no data.
+                (if (re-find #"This node was decommissioned"
+                             (c/su (c/exec :journalctl :-u :scylla-server
+                                           :-n 20 :--no-pager)))
+                  (do (info node "left decommissioned; wiping to rejoin")
+                      (sdb/wipe! this test node)
+                      (db/start! this test node))
+                  (throw+))))
         (sc/close! (sc/await-open test node))
         (info "Scylla up in"
               (float (util/nanos->secs (- (util/linear-time-nanos) t1)))
