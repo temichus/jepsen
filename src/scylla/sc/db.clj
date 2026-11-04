@@ -58,7 +58,8 @@
   ; systemd 252 parses only upper case: -s kill fails, exit 1.
   (try+ (c/exec :systemctl :kill :--kill-whom=main :-s (str/upper-case (name sig)) :scylla-server)
         (catch [:exit 1] {:keys [err]}
-          (when-not (str/includes? err "No main process")
+          ; A stopped server's unit is often garbage-collected: not loaded.
+          (when-not (re-find #"No main process|not loaded" err)
             (throw+)))))
 
 (defn db
