@@ -10,7 +10,6 @@
             [jepsen [control :as c]
                     [db :as db]
                     [util :as util :refer [meh]]]
-            [jepsen.control.util :as cu]
             [scylla [db :as sdb]]
             [scylla.sc [client :as sc]]
             [slingshot.slingshot :refer [try+ throw+]]))
@@ -47,6 +46,15 @@
   "Scylla logs to journald on both SCT and the local nodes; we export the
   unit's journal here for Jepsen to download."
   "/var/log/scylla-jepsen.log")
+
+(defn- signal!
+  "Sends sig to the scylla process, if any. Matches the process name, not
+  the command line: cu/grepkill!'s pgrep -f also matches its own pipeline's
+  child before it execs xargs, so xargs can SIGSTOP itself and the ssh call
+  hangs forever."
+  [sig]
+  (try+ (c/exec :pkill (str "-" (name sig)) :-x :scylla)
+        (catch [:exit 1] _))) ; no such process
 
 (defn db
   "A Jepsen DB over an already-provisioned ScyllaDB cluster."
@@ -100,14 +108,14 @@
     (kill! [_ test node]
       (info node "killing ScyllaDB")
       (c/su
-        (cu/grepkill! "/usr/bin/scylla")
+        (signal! :kill)
         (try+ (c/exec :service :scylla-server :stop)
               (catch [:exit 1] e)
               (catch [:exit 5] e))))
 
     db/Pause
     (pause! [_ test node]
-      (c/su (cu/grepkill! :stop "/usr/bin/scylla")))
+      (c/su (signal! :stop)))
 
     (resume! [_ test node]
-      (c/su (cu/grepkill! :cont :scylla)))))
+      (c/su (signal! :cont)))))
