@@ -74,8 +74,9 @@
         (try+ (db/start! this test node)
               (catch [:exit 1] _
                 ; The membership nemesis can end a test with a node
-                ; decommissioned; Scylla only lets it rejoin with no data.
-                (if (re-find #"This node was decommissioned"
+                ; decommissioned, or banned after a cancelled join; Scylla
+                ; only lets it rejoin with no data.
+                (if (re-find #"This node was decommissioned|banned from the cluster|rejected request to join|already been removed"
                              (c/su (c/exec :journalctl :-u :scylla-server
                                            :-n 20 :--no-pager)))
                   (do (info node "left decommissioned; wiping to rejoin")

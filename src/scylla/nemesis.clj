@@ -5,6 +5,7 @@
             [clojure.set :as set]
             [scylla [client :as client]
                     [db :as sdb]]
+            [scylla.sc [client :as sc]]
             [slingshot.slingshot :refer [try+ throw+]]
             [jepsen [control :as c]
                     [db :as db]
@@ -303,12 +304,23 @@
         :pass :passed
 
         :add-node
-        (do (c/on-nodes test [value]
-                        (fn [test node]
-                          (sdb/enable!)
-                          (sdb/rejoin-seeds! test node)
-                          (db/start! db test node)))
-            [:added value])
+        ; Added only once it serves CQL: a kill mid-join can get the join
+        ; cancelled and the node banned. Then wipe it and keep it free, so a
+        ; later add-node retries it.
+        (try (c/on-nodes test [value]
+                         (fn [test node]
+                           (sdb/enable!)
+                           (sdb/rejoin-seeds! test node)
+                           (db/start! db test node)
+                           (sc/close! (sc/await-open test node))))
+             [:added value]
+             (catch Exception e
+               (warn e value "did not join; wiping it")
+               (c/on-nodes test [value]
+                           (fn [test node]
+                             (sdb/wipe! db test node)
+                             (sdb/disable!)))
+               [:add-failed value]))
 
         :remove-node
         (with-nodetool-errors
@@ -338,7 +350,9 @@
 
       ; When we add a node, it's no longer free.
       :add-node
-      (update this :free disj (:value op))
+      (if (= :added (first (:value op')))
+        (update this :free disj (:value op))
+        this)
 
       ; We're done removing a node once it's free, or if we know the remove
       ; definitely failed.
@@ -388,11 +402,14 @@
       ; At the end of the test, re-add everyone.
       (assoc pkg
              :final-generator
-             (fn final-gen [test ctx]
-               (info :nemesis (-> pkg :nemesis))
-               (when-let [node (->> pkg :nemesis :state deref
-                                    removed-or-free-nodes first)]
-                 {:type :info, :f :add-node, :value node}))
+             ; Bounded: a node that never rejoins stays free, and would
+             ; otherwise be re-added forever.
+             (gen/limit 5
+               (fn final-gen [test ctx]
+                 (info :nemesis (-> pkg :nemesis))
+                 (when-let [node (->> pkg :nemesis :state deref
+                                      removed-or-free-nodes first)]
+                   {:type :info, :f :add-node, :value node})))
              :perf #{{:name "membership"
                       :fs   #{:add-node
                               :repair-node
