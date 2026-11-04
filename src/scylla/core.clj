@@ -176,7 +176,7 @@
         nemesis  (nemesis/package
                    {:db         db
                     :faults     (set (:nemesis opts))
-                    :partition  {:targets [:majority]}
+                    :partition  {:targets (:partition-targets opts)}
                     :interval  (:nemesis-interval opts)})
         generator (->> (:generator workload)
                        (gen/stagger (/ (:rate opts)))
@@ -208,7 +208,9 @@
                                (when-let [rc (:read-consistency opts)]
                                  (str " rc:"  (name rc)))
                                (when-let [n(:nemesis opts)]
-                                 (str " " (str/join "," (map name n)))))
+                                 (str " " (str/join "," (map name n))
+                                      (when (not= [:majority] (:partition-targets opts))
+                                        (str "@" (str/join "," (map name (:partition-targets opts))))))))
             :os           debian/os
             :db           db
             :nemesis      (:nemesis nemesis)
@@ -267,6 +269,12 @@
     :validate [(partial every? (into nemeses (keys special-nemeses)))
                (str "Faults must be one of " nemeses " or "
                     (cli/one-of special-nemeses))]]
+
+   [nil "--partition-targets TARGETS" "Comma-separated partition specs to pick from: one, minority-third, majority, majorities-ring."
+    :default  [:majority]
+    :parse-fn #(mapv keyword (str/split % #","))
+    :validate [(partial every? #{:one :minority-third :majority :majorities-ring})
+               "must be one, minority-third, majority or majorities-ring"]]
 
    [nil "--nemesis-interval SECONDS" "How long to wait between nemesis faults."
     :default  10
