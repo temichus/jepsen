@@ -57,9 +57,9 @@
   [sig]
   ; systemd 252 parses only upper case: -s kill fails, exit 1.
   (try+ (c/exec :systemctl :kill :--kill-whom=main :-s (str/upper-case (name sig)) :scylla-server)
-        (catch [:exit 1] {:keys [err] :as e}
+        (catch [:exit 1] {:keys [err]}
           (when-not (str/includes? err "No main process")
-            (throw+ e)))))
+            (throw+)))))
 
 (defn db
   "A Jepsen DB over an already-provisioned ScyllaDB cluster."
