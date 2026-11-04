@@ -7,7 +7,8 @@
 
   Selected by --no-install-scylla (scylla.core). scylla.db stays for runs
   that install and re-form the cluster themselves."
-  (:require [clojure.tools.logging :refer [info]]
+  (:require [clojure.string :as str]
+            [clojure.tools.logging :refer [info]]
             [jepsen [control :as c]
                     [db :as db]
                     [util :as util :refer [meh]]]
@@ -54,8 +55,11 @@
   xargs can SIGSTOP itself and the ssh call hangs forever. Not pkill -x
   scylla either: that also hits `scylla nodetool`."
   [sig]
-  (try+ (c/exec :systemctl :kill :--kill-whom=main :-s (name sig) :scylla-server)
-        (catch [:exit 1] _))) ; no main process
+  ; systemd 252 parses only upper case: -s kill fails, exit 1.
+  (try+ (c/exec :systemctl :kill :--kill-whom=main :-s (str/upper-case (name sig)) :scylla-server)
+        (catch [:exit 1] {:keys [err] :as e}
+          (when-not (str/includes? err "No main process")
+            (throw+ e)))))
 
 (defn db
   "A Jepsen DB over an already-provisioned ScyllaDB cluster."
