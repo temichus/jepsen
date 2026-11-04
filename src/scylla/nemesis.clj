@@ -304,23 +304,31 @@
         :pass :passed
 
         :add-node
-        ; Added only once it serves CQL: a kill mid-join can get the join
-        ; cancelled and the node banned. Then wipe it and keep it free, so a
-        ; later add-node retries it.
+        ; A kill mid-join can get the join cancelled and the node banned:
+        ; then wipe it and keep it free, so a later add-node retries it. A
+        ; node that joined but serves no CQL yet is a member; wiping it would
+        ; leave a dead normal node nothing removes.
         (try (c/on-nodes test [value]
                          (fn [test node]
+                           (sdb/mark-journal!)
                            (sdb/enable!)
                            (sdb/rejoin-seeds! test node)
                            (db/start! db test node)
                            (sc/close! (sc/await-open test node))))
              [:added value]
              (catch Exception e
-               (warn e value "did not join; wiping it")
-               (c/on-nodes test [value]
-                           (fn [test node]
-                             (sdb/wipe! db test node)
-                             (sdb/disable!)))
-               [:add-failed value]))
+               (if (re-find sdb/join-refused
+                            (get (c/on-nodes test [value]
+                                             (fn [_ _] (sdb/journal-since-mark)))
+                                 value))
+                 (do (warn e value "join refused; wiping it")
+                     (c/on-nodes test [value]
+                                 (fn [test node]
+                                   (sdb/wipe! db test node)
+                                   (sdb/disable!)))
+                     [:add-failed value])
+                 (do (warn e value "no CQL, join not refused")
+                     [:added value :no-cql]))))
 
         :remove-node
         (with-nodetool-errors

@@ -346,6 +346,26 @@
   [test node]
   (->> (:nodes test) (remove #{node}) (map dns-resolve) (str/join ",")))
 
+(def join-refused
+  "Log lines of a node Scylla only lets rejoin with no data."
+  #"This node was decommissioned|banned from the cluster|rejected request to join|already been removed")
+
+(def journal-mark "/tmp/scylla-jepsen.cursor")
+
+(defn mark-journal!
+  "Remembers the end of scylla-server's journal for journal-since-mark. A
+  cursor, not --since: the clock nemesis moves wall time."
+  []
+  (c/su (c/exec :rm :-f journal-mark)
+        (c/exec :journalctl :-u :scylla-server :-n 1 :-q
+                (str "--cursor-file=" journal-mark))))
+
+(defn journal-since-mark
+  "scylla-server's journal after mark-journal!."
+  []
+  (c/su (c/exec :journalctl :-u :scylla-server :--no-pager :-q
+                (str "--cursor-file=" journal-mark))))
+
 (defn rejoin-seeds!
   "Points node's scylla.yaml at join-seeds, before a wiped node starts."
   [test node]
