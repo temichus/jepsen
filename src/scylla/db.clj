@@ -340,10 +340,17 @@
   (->> (:nodes test) first dns-resolve str))
 
 (defn join-seeds
-  "Returns a comma-separated string of seed nodes to join to.
-   Is used when adding a node to a non-empty cluster. Return only first node."
+  "Returns a comma-separated string of seed nodes to join to: every node but
+  this one. Is used when adding a node to a non-empty cluster; a wiped node
+  that is its own seed bootstraps a new cluster instead of rejoining."
   [test node]
-  (->> (:nodes test) first dns-resolve str))
+  (->> (:nodes test) (remove #{node}) (map dns-resolve) (str/join ",")))
+
+(defn rejoin-seeds!
+  "Points node's scylla.yaml at join-seeds, before a wiped node starts."
+  [test node]
+  (c/su (c/exec :sed :-i (str "s/- seeds: .*/- seeds: \"" (join-seeds test node) "\"/")
+                "/etc/scylla/scylla.yaml")))
 
 (defn extra-scylla-args
   "Extra scylla args which are substituted into the SCYLLA_ARGS config."

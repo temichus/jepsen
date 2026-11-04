@@ -75,6 +75,7 @@
                                            :-n 20 :--no-pager)))
                   (do (info node "left decommissioned; wiping to rejoin")
                       (sdb/wipe! this test node)
+                      (sdb/rejoin-seeds! test node)
                       (db/start! this test node))
                   (throw+))))
         (sc/close! (sc/await-open test node))

@@ -306,6 +306,7 @@
         (do (c/on-nodes test [value]
                         (fn [test node]
                           (sdb/enable!)
+                          (sdb/rejoin-seeds! test node)
                           (db/start! db test node)))
             [:added value])
 
