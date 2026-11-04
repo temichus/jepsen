@@ -1,8 +1,9 @@
 (ns scylla.sc.db
   "A DB for clusters somebody else installed and configured: SCT, or the
-  local Docker nodes. It never writes scylla.yaml and deletes data only of a
-  node the membership nemesis left decommissioned; otherwise it only starts,
-  stops, kills and pauses Scylla, and knows where the log is.
+  local Docker nodes. It deletes data only of a node the membership nemesis
+  left decommissioned, and then points that node's seeds at the other nodes
+  in scylla.yaml; otherwise it only starts, stops, kills and pauses Scylla,
+  and knows where the log is.
 
   Selected by --no-install-scylla (scylla.core). scylla.db stays for runs
   that install and re-form the cluster themselves."
@@ -48,13 +49,13 @@
   "/var/log/scylla-jepsen.log")
 
 (defn- signal!
-  "Sends sig to the scylla process, if any. Matches the process name, not
-  the command line: cu/grepkill!'s pgrep -f also matches its own pipeline's
-  child before it execs xargs, so xargs can SIGSTOP itself and the ssh call
-  hangs forever."
+  "Sends sig to the scylla server process, if any. Not cu/grepkill!: its
+  pgrep -f also matches its own pipeline's child before it execs xargs, so
+  xargs can SIGSTOP itself and the ssh call hangs forever. Not pkill -x
+  scylla either: that also hits `scylla nodetool`."
   [sig]
-  (try+ (c/exec :pkill (str "-" (name sig)) :-x :scylla)
-        (catch [:exit 1] _))) ; no such process
+  (try+ (c/exec :systemctl :kill :--kill-whom=main :-s (name sig) :scylla-server)
+        (catch [:exit 1] _))) ; no main process
 
 (defn db
   "A Jepsen DB over an already-provisioned ScyllaDB cluster."

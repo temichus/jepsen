@@ -349,7 +349,8 @@
 (defn rejoin-seeds!
   "Points node's scylla.yaml at join-seeds, before a wiped node starts."
   [test node]
-  (c/su (c/exec :sed :-i (str "s/- seeds: .*/- seeds: \"" (join-seeds test node) "\"/")
+  (c/su (c/exec :grep :-qe "- seeds:" "/etc/scylla/scylla.yaml") ; else sed silently does nothing
+        (c/exec :sed :-i (str "s/- seeds: .*/- seeds: \"" (join-seeds test node) "\"/")
                 "/etc/scylla/scylla.yaml")))
 
 (defn extra-scylla-args
