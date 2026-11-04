@@ -228,7 +228,7 @@
   [& body]
   `(try+ ~@body
          (catch [:type :jepsen.control/nonzero-exit] e#
-           (condp re-find (:out e#)
+           (condp re-find (str (:out e#) (:err e#)) ; nodetool errors go to stderr
              #"Connection refused"         :conn-refused
              #"alive and owns this ID"     :node-considered-alive
              #"removenode is in progress"  :remove-in-progress
@@ -238,12 +238,15 @@
              #"Repair job has failed"      :repair-failed
              ; Any other failure, e.g. a decommission cancelled for dead
              ; nodes: the node is still a member.
-             [:nodetool-failed (:out e#)]))))
+             [:nodetool-failed (str (:out e#) (:err e#))]))))
 
 (defn not-removed?
   "Is v, a remove or decommission result, one that left the node a member?
   A timed-out one may still finish, but wiping the node meanwhile leaves a
-  dead normal node every later join waits for."
+  dead normal node every later join waits for.
+  ponytail: if the timed-out op finishes later, the node is gone but still
+  counted a member until the next setup! rejoins it; check :view if that
+  starves the nemesis."
   [v]
   (and (sequential? v)
        (or (= :timeout (last v))

@@ -15,3 +15,8 @@
     (is (some? (ms/resolve-op s nil [op {:value [:decommissioned "n2" :timeout]}])))
     (is (some? (ms/resolve-op s nil [op {:value [:nodetool-failed "Canceled"]}])))
     (is (nil? (ms/resolve-op s nil [op {:value [:decommissioned "n2" "ok"]}])))))
+
+(deftest timed-out-remove-resolves
+  (let [s  (n/map->MembershipState {:free #{}})
+        op {:f :remove-node, :value {:node {:node "n2"}}}]
+    (is (some? (ms/resolve-op s nil [op {:value [:removed "n2" :timeout]}])))))
