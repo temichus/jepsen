@@ -236,7 +236,18 @@
              #"failed to repair \d+ sub ranges" [:failed-to-repair-sub-ranges
                                                  (:out e#)]
              #"Repair job has failed"      :repair-failed
-             (throw+ e#)))))
+             ; Any other failure, e.g. a decommission cancelled for dead
+             ; nodes: the node is still a member.
+             [:nodetool-failed (:out e#)]))))
+
+(defn not-removed?
+  "Is v, a remove or decommission result, one that left the node a member?
+  A timed-out one may still finish, but wiping the node meanwhile leaves a
+  dead normal node every later join waits for."
+  [v]
+  (and (sequential? v)
+       (or (= :timeout (last v))
+           (= :nodetool-failed (first v)))))
 
 ; `free` is a set of nodes we've removed from the cluster and destroyed data
 ; on.
@@ -317,10 +328,14 @@
                            (sc/close! (sc/await-open test node))))
              [:added value]
              (catch Exception e
-               (if (re-find sdb/join-refused
-                            (get (c/on-nodes test [value]
-                                             (fn [_ _] (sdb/journal-since-mark)))
-                                 value))
+               (if (let [j (get (c/on-nodes test [value]
+                                            (fn [_ _] (sdb/journal-since-mark)))
+                                value)]
+                     ; Startup can fail before the coordinator accepts the
+                     ; join (no group 0 quorum): not a member either.
+                     (or (re-find sdb/join-refused j)
+                         (and (re-find #"Startup failed" j)
+                              (not (re-find #"coordinator accepted request to join|join: success" j)))))
                  (do (warn e value "join refused; wiping it")
                      (c/on-nodes test [value]
                                  (fn [test node]
@@ -370,6 +385,7 @@
                    :node-considered-alive
                    :remove-in-progress}
                   (:value op'))
+                (not-removed? (:value op'))
                 (free (:node (:node (:value op)))))
         this)
 
@@ -380,6 +396,7 @@
                    :host-id-not-found
                    :node-considered-alive}
                   (:value op'))
+                (not-removed? (:value op'))
                 (free (:value op)))
         this)
 
