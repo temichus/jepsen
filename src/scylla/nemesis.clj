@@ -428,10 +428,12 @@
               via    (:via value)
               restart! #(c/on-nodes test [target]
                                     (fn [test node]
-                                      (db/start! db test node)
-                                      (try (sc/close! (sc/await-open test node))
+                                      ; Scylla may refuse to start, e.g.
+                                      ; SCYLLADB-5657: log it, don't crash.
+                                      (try (db/start! db test node)
+                                           (sc/close! (sc/await-open test node))
                                            (catch Exception e
-                                             (warn e node "no CQL after restart")))))]
+                                             (warn e node "restart failed")))))]
           (heal-all! test db target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))
