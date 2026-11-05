@@ -433,7 +433,10 @@
         ; A :kill? target is live: kill it and let `via` see it down. If the
         ; remove then fails or times out, start it again: a dead member
         ; cancels every later topology op. A timed-out remove whose target
-        ; is already gone from via's status counts as removed.
+        ; is already gone from via's status counts as removed, and so does
+        ; one whose target shows X (excluded): it still runs, and Scylla
+        ; bans that target on start, so we disable! it to be wiped and
+        ; re-added like any removed node.
         ; ponytail: one that times out and finishes later bans the restarted
         ; node, still counted a member, as `not-removed?` notes.
         :remove-node
@@ -462,9 +465,13 @@
                                   (sdb/remove-node!
                                     test via
                                     (merge (:node value) (select-keys e [:id]))))]
-                          (if (and (= :timeout (get r 2))
-                                   (nil? (await-down! test via target)))
-                            (assoc r 2 "timed out, but gone from status")
+                          (if (= :timeout (get r 2))
+                            (case (:status (await-down! test via target))
+                              nil       (assoc r 2 "timed out, but gone from status")
+                              :excluded (do (c/on-nodes test [target]
+                                                        (fn [_ _] (sdb/disable!)))
+                                            (assoc r 2 "timed out, excluded"))
+                              r)
                             r))
                         (catch Throwable t
                           (try (restart!)

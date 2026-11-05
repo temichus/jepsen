@@ -12,6 +12,7 @@
             [jepsen [control :as c]
                     [db :as db]
                     [util :as util :refer [meh]]]
+            [jepsen.control [util :as cu]]
             [scylla [db :as sdb]]
             [scylla.sc [client :as sc]]
             [slingshot.slingshot :refer [try+ throw+]]))
@@ -111,8 +112,12 @@
 
     db/Process
     (start! [_ test node]
-      (info node "starting ScyllaDB")
-      (c/su (c/exec :service :scylla-server :start)))
+      ; A wiped, disable!d node is out of the cluster: the kill fault's
+      ; :start must not bring it back (nor crash on the missing binary).
+      (if (cu/exists? sdb/scylla-bin)
+        (do (info node "starting ScyllaDB")
+            (c/su (c/exec :service :scylla-server :start)))
+        (info node "not starting ScyllaDB: disabled")))
 
     (kill! [_ test node]
       (info node "killing ScyllaDB")

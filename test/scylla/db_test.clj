@@ -11,3 +11,9 @@
       (is (= :up (:status m)) line)
       (is (= :normal (:state m)) line)
       (is (= "rack1" (:rack m)) line))))
+
+(deftest parse-excluded-node-test
+  ; Scylla shows a node a removenode ignores as X; an unknown letter used to
+  ; throw a parse error and blind the nemesis's node views.
+  (is (= :excluded (:status (db/parse-nodetool-status-line
+                              "XN 172.19.0.5 1.97 MiB 256    ?    16301599-8a49-49b2-a0e1-adcbe0b23db4 rack1")))))

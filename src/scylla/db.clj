@@ -66,11 +66,13 @@
   [line]
   (when-let [[match status state address load tokens owns id rack]
              ; Load is "598.11 KB" on old Scylla, "2.11 MiB" on current.
-             (re-find #"^([UD\?])([NLJM\?])\s+(.+?)\s+(\?|.+? bytes|.+? \w+B)\s+(\d+)\s+(.+?)\s+(.+?)\s+(.+?)$" line)]
+             (re-find #"^([UDX\?])([NLJM\?])\s+(.+?)\s+(\?|.+? bytes|.+? \w+B)\s+(\d+)\s+(.+?)\s+(.+?)\s+(.+?)$" line)]
     (let [status (case status
                    "?" :unknown
                    "U" :up
-                   "D" :down)
+                   "D" :down
+                   ; Down, and on a removenode's ignored-nodes list.
+                   "X" :excluded)
           state (case state
                   "?" :unknown
                   "N" :normal
