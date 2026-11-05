@@ -375,7 +375,7 @@
 
 
         :repair-node
-        (with-nodetool-errors (sdb/repair-node! test value)))))
+        (sdb/repair-node! test value))))
 
   (resolve [this test]
     this)

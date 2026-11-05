@@ -176,21 +176,24 @@
                               :timeout)))))
         node)])
 
+(def repair-log "/tmp/jepsen-repair.log")
+
 (defn repair-node!
-  "Issues a nodetool repair on a single node."
+  "Starts a nodetool repair on a single node and returns. Waiting blocked the
+  one nemesis worker for the whole timeout whenever a fault it can't heal
+  meanwhile stalled the repair; nothing reads the result."
   [test node]
-  [:repaired node
-   (get (c/on-nodes test [node]
-                  (fn [_ _]
-                    (c/su
-                      (info "Repairing" node)
-                      ; Plain `nodetool repair` skips tablet keyspaces
-                      ; ("Do not use nodetool repair for tablet keyspaces").
-                      (try+ (c/exec :timeout remove-timeout
-                                    :nodetool :cluster :repair)
-                            (catch [:exit 124] e
-                              :timeout)))))
-        node)])
+  (c/on-nodes test [node]
+              (fn [_ _]
+                (c/su
+                  (info "Repairing" node)
+                  ; Plain `nodetool repair` skips tablet keyspaces
+                  ; ("Do not use nodetool repair for tablet keyspaces").
+                  ; flock: at most one per node, however long they stall.
+                  (c/exec :sh :-c (str "nohup flock -n /tmp/jepsen-repair.lock"
+                                       " timeout 600 nodetool cluster repair"
+                                       " < /dev/null >> " repair-log " 2>&1 &")))))
+  [:repair-started node])
 
 (defn wait-for-recovery
   "Waits for the driver to report all nodes are up"

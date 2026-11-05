@@ -106,8 +106,8 @@
       ; Jepsen collects logs before teardown!, so the export happens here.
       (meh (c/su (c/exec :sh :-c
                          (str "journalctl -u scylla-server --no-pager > "
-                              log-file))))
-      [log-file])
+                              log-file "; touch " sdb/repair-log))))
+      [log-file sdb/repair-log])
 
     db/Process
     (start! [_ test node]
