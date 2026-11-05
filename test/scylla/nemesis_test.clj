@@ -22,7 +22,7 @@
     (is (some? (ms/resolve-op s nil [op {:value [:removed "n2" :timeout]}])))
     (testing "any failure shape resolves; success waits for the wipe"
       (doseq [v [:conn-refused :repair-failed [:nodetool-failed "x"]
-                 [:failed-to-repair-sub-ranges "x"]]]
+                 [:failed-to-repair-sub-ranges "x"] [:not-killed "n2" ["n3"]]]]
         (is (some? (ms/resolve-op s nil [op {:value v}])) (pr-str v)))
       (is (nil? (ms/resolve-op s nil [op {:value [:removed "n2" ""]}]))))))
 

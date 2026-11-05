@@ -294,6 +294,19 @@
                            e)))))
        via))
 
+(defn- others-down
+  "Nodes other than node that via's `nodetool status` doesn't show up; via
+  itself if nodetool fails."
+  [test via node]
+  (->> (get (c/on-nodes test [via]
+                        (fn [test _]
+                          (try+ (sdb/nodetool-status test)
+                                (catch Object _
+                                  [{:node via, :status :failed}]))))
+            via)
+       (remove #(or (= node (:node %)) (= :up (:status %))))
+       (map :node)))
+
 (defn removed?
   "Did v, a remove-node! or decommission-node! result, report success?"
   [v]
@@ -437,24 +450,28 @@
           (heal-all! test db target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))
-            (let [r (try
-                      (c/on-nodes test [target]
-                                  (fn [test node] (db/kill! db test node)))
-                      (let [e (await-down! test via target)
-                            r (with-nodetool-errors
-                                (sdb/remove-node!
-                                  test via
-                                  (merge (:node value) (select-keys e [:id]))))]
-                        (if (and (= :timeout (get r 2))
-                                 (nil? (await-down! test via target)))
-                          (assoc r 2 "timed out, but gone from status")
-                          r))
-                      (catch Throwable t
-                        (try (restart!)
-                             (catch Throwable e (.addSuppressed t e)))
-                        (throw t)))]
-              (when-not (removed? r) (restart!))
-              r)))
+            ; Never kill a second member: with another one not up for via,
+            ; RF=3 tablets lose quorum and every later topology op hangs.
+            (if-let [down (seq (others-down test via target))]
+              [:not-killed target (vec down)]
+              (let [r (try
+                        (c/on-nodes test [target]
+                                    (fn [test node] (db/kill! db test node)))
+                        (let [e (await-down! test via target)
+                              r (with-nodetool-errors
+                                  (sdb/remove-node!
+                                    test via
+                                    (merge (:node value) (select-keys e [:id]))))]
+                          (if (and (= :timeout (get r 2))
+                                   (nil? (await-down! test via target)))
+                            (assoc r 2 "timed out, but gone from status")
+                            r))
+                        (catch Throwable t
+                          (try (restart!)
+                               (catch Throwable e (.addSuppressed t e)))
+                          (throw t)))]
+                (when-not (removed? r) (restart!))
+                r))))
 
         :decommission-node
         (do (heal-all! test db nil)
