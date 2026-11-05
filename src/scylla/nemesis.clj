@@ -172,29 +172,43 @@
     {:type :info, :f :repair-node, :value n}))
 
 (defn remove-op
-  "Generates a remove node op for a membership state, if possible."
+  "Generates a remove node op for a membership state, if possible. Views are
+  refreshed rarely and pauses are short, so a view rarely shows a node down:
+  then we pick a live member, flagged :kill?, for invoke! to kill first."
   [state]
   ;(info "state" (pprint-str state))
   ;(info "nv" (pprint-str (:node-views state)))
-  (when-let [v (rand-nth-empty
-                 (for [[via node-view] (:node-views state)
-                       node            node-view]
-                   (when ; We can only remove nodes `via` thinks are down
-                     (and (not (up? node))
-                          ; And not nodes which are free. I'm not sure
-                          ; we actually want to prevent this, but I
-                          ; *think* it steers us into
-                          ; more-likely-to-succeed territory.
-                          (not (contains? (:free state) (:node node)))
-                          ; Don't try to remove self.
-                          (not= via (:node node))
-                          ; Don't remove if we've got too many nodes freed or
-                          ; being removed at once.
-                          (< (count (removed-or-free-nodes state))
-                                    max-removed-nodes))
-                     {:via via
-                      :node (select-keys node [:node :id])})))]
-    {:type :info, :f :remove-node, :value v}))
+  ; Don't remove if we've got too many nodes freed or being removed at once.
+  (when (< (count (removed-or-free-nodes state)) max-removed-nodes)
+    (when-let [v (or (rand-nth-empty
+                       (for [[via node-view] (:node-views state)
+                             node            node-view
+                             ; We can only remove nodes `via` thinks are down
+                             :when (and (not (up? node))
+                                        ; And not nodes which are free. I'm
+                                        ; not sure we actually want to prevent
+                                        ; this, but I *think* it steers us into
+                                        ; more-likely-to-succeed territory.
+                                        (not (contains? (:free state)
+                                                        (:node node)))
+                                        ; Don't try to remove self.
+                                        (not= via (:node node)))]
+                         {:via via
+                          :node (select-keys node [:node :id])}))
+                     ; Members which think they're up, as decommission-op.
+                     (let [up (for [[via node-view] (:node-views state)
+                                    node            node-view
+                                    :when (and (= via (:node node))
+                                               (up? node)
+                                               (not (contains? (:free state)
+                                                               via)))]
+                                (select-keys node [:node :id]))]
+                       (when-let [node (rand-nth-empty up)]
+                         (when-let [via (rand-nth-empty
+                                          (remove #{(:node node)}
+                                                  (map :node up)))]
+                           {:via via, :node node, :kill? true}))))]
+      {:type :info, :f :remove-node, :value v})))
 
 (defn decommission-op
   "Generates a decommission node op for a membership state, if possible."
@@ -257,6 +271,19 @@
   (c/on-nodes test (remove #{except} (:nodes test))
               (fn [test node] (db/resume! db test node)))
   (Thread/sleep heal-settle-ms))
+
+(defn- await-down!
+  "Polls `nodetool status` on via until it shows node down, for up to 60 s.
+  If it never does, the remove fails as alive."
+  [test via node]
+  (c/on-nodes test [via]
+              (fn [test _]
+                (loop [tries 60]
+                  (when (and (pos? tries)
+                             (some #(and (= node (:node %)) (up? %))
+                                   (sdb/nodetool-status test)))
+                    (Thread/sleep 1000)
+                    (recur (dec tries)))))))
 
 (defn not-removed?
   "Is v, a remove or decommission result, one that left the node a member?
@@ -376,10 +403,22 @@
                                        (sdb/disable!)))
                          [:add-failed value])))))
 
+        ; A :kill? target is live: kill it and let `via` see it down. If the
+        ; remove then fails or times out, start it again: a dead member
+        ; cancels every later topology op.
         :remove-node
-        (do (heal-all! test db (:node (:node value)))
-            (with-nodetool-errors
-              (sdb/remove-node! test (:via value) (:node value))))
+        (let [target (:node (:node value))
+              on-target (fn [f] (c/on-nodes test [target]
+                                            (fn [test node] (f db test node))))
+              r (do (heal-all! test db target)
+                    (when (:kill? value)
+                      (on-target db/kill!)
+                      (await-down! test (:via value) target))
+                    (with-nodetool-errors
+                      (sdb/remove-node! test (:via value) (:node value))))]
+          (when (and (:kill? value) (not (string? (get r 2))))
+            (on-target db/start!))
+          r)
 
         :decommission-node
         (do (heal-all! test db nil)
