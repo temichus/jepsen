@@ -461,13 +461,17 @@
       (assoc pkg
              :final-generator
              ; Bounded: a node that never rejoins stays free, and would
-             ; otherwise be re-added forever.
-             (gen/limit 5
+             ; otherwise be re-added forever. A removed or decommissioned
+             ; node is wiped first: a decommissioned one still runs, so
+             ; starting it is a no-op. The wipe frees the node, which
+             ; resolves its remove op, so it is re-added once.
+             (gen/limit 8
                (fn final-gen [test ctx]
-                 (info :nemesis (-> pkg :nemesis))
-                 (when-let [node (->> pkg :nemesis :state deref
-                                      removed-or-free-nodes first)]
-                   {:type :info, :f :add-node, :value node})))
+                 (let [state (-> pkg :nemesis :state deref)]
+                   (when-let [node (first (removed-or-free-nodes state))]
+                     {:type  :info
+                      :f     (if ((:free state) node) :add-node :wipe-node)
+                      :value node}))))
              :perf #{{:name "membership"
                       :fs   #{:add-node
                               :repair-node
