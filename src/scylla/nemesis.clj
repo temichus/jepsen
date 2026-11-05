@@ -10,6 +10,7 @@
             [jepsen [control :as c]
                     [db :as db]
                     [generator :as gen]
+                    [net :as net]
                     [nemesis :as n]
                     [util :as util :refer [rand-nth-empty
                                            pprint-str]]]
@@ -240,11 +241,21 @@
              ; nodes: the node is still a member.
              [:nodetool-failed (str (:out e#) (:err e#))]))))
 
-(defn- resume-all!
-  "SIGCONTs scylla on every node but except; a no-op where it is not paused."
+(def heal-settle-ms
+  "Wait after a heal: the coordinator's failure detector must see healed nodes
+  up, else it cancels the request for dead nodes (a join 0.1 s after a heal
+  was)."
+  5000)
+
+(defn- heal-all!
+  "Heals the network and SIGCONTs scylla on every node but except (resume is a
+  no-op where it is not paused), then waits heal-settle-ms. The partition
+  package's later :stop-partition is a second, harmless heal."
   [test db except]
+  (net/heal! (:net test) test)
   (c/on-nodes test (remove #{except} (:nodes test))
-              (fn [test node] (db/resume! db test node))))
+              (fn [test node] (db/resume! db test node)))
+  (Thread/sleep heal-settle-ms))
 
 (defn not-removed?
   "Is v, a remove or decommission result, one that left the node a member?
@@ -323,47 +334,50 @@
       (case f
         :pass :passed
 
+        ; Topology ops are refused or stall while any normal node is paused or
+        ; partitioned away, and they block the one nemesis worker (up to
+        ; remove-timeout, ~120 s await-open for a join), so its :resume or
+        ; :stop-partition never comes: heal first. A paused remove target
+        ; stays paused: that's what we remove.
         :add-node
         ; A kill mid-join can get the join cancelled and the node banned:
         ; then wipe it and keep it free, so a later add-node retries it. A
         ; node the coordinator accepted is a member even with no CQL yet;
         ; wiping it would leave a dead normal node nothing removes. Stop it
         ; before reading the journal, so it can't be accepted after we look.
-        (try (c/on-nodes test [value]
-                         (fn [test node]
-                           (sdb/mark-journal!)
-                           (sdb/enable!)
-                           (sdb/rejoin-seeds! test node)
-                           (db/start! db test node)
-                           (sc/close! (sc/await-open test node))))
-             [:added value]
-             (catch Exception e
-               (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
-               (if (let [j (get (c/on-nodes test [value]
-                                            (fn [_ _] (sdb/journal-since-mark)))
-                                value)]
-                     (and (re-find #"coordinator accepted request to join|join: success" j)
-                          (not (re-find sdb/join-refused j))))
-                 (do (warn e value "no CQL, but joined; restarting it")
-                     (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
-                     [:added value :no-cql])
-                 (do (warn e value "join not accepted; wiping it")
-                     (c/on-nodes test [value]
-                                 (fn [test node]
-                                   (sdb/wipe! db test node)
-                                   (sdb/disable!)))
-                     [:add-failed value]))))
+        (do (heal-all! test db nil)
+            (try (c/on-nodes test [value]
+                             (fn [test node]
+                               (sdb/mark-journal!)
+                               (sdb/enable!)
+                               (sdb/rejoin-seeds! test node)
+                               (db/start! db test node)
+                               (sc/close! (sc/await-open test node))))
+                 [:added value]
+                 (catch Exception e
+                   (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
+                   (if (let [j (get (c/on-nodes test [value]
+                                                (fn [_ _] (sdb/journal-since-mark)))
+                                    value)]
+                         (and (re-find #"coordinator accepted request to join|join: success" j)
+                              (not (re-find sdb/join-refused j))))
+                     (do (warn e value "no CQL, but joined; restarting it")
+                         (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
+                         [:added value :no-cql])
+                     (do (warn e value "join not accepted; wiping it")
+                         (c/on-nodes test [value]
+                                     (fn [test node]
+                                       (sdb/wipe! db test node)
+                                       (sdb/disable!)))
+                         [:add-failed value])))))
 
-        ; These block the one nemesis worker for up to remove-timeout, so a
-        ; paused majority would never get its :resume: resume the others
-        ; first. A paused remove target stays paused: that's what we remove.
         :remove-node
-        (do (resume-all! test db (:node (:node value)))
+        (do (heal-all! test db (:node (:node value)))
             (with-nodetool-errors
               (sdb/remove-node! test (:via value) (:node value))))
 
         :decommission-node
-        (do (resume-all! test db nil)
+        (do (heal-all! test db nil)
             (with-nodetool-errors (sdb/decommission-node! test value)))
 
         :wipe-node
