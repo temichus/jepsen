@@ -240,6 +240,12 @@
              ; nodes: the node is still a member.
              [:nodetool-failed (str (:out e#) (:err e#))]))))
 
+(defn- resume-all!
+  "SIGCONTs scylla on every node but except; a no-op where it is not paused."
+  [test db except]
+  (c/on-nodes test (remove #{except} (:nodes test))
+              (fn [test node] (db/resume! db test node))))
+
 (defn not-removed?
   "Is v, a remove or decommission result, one that left the node a member?
   A timed-out one may still finish, but wiping the node meanwhile leaves a
@@ -320,8 +326,9 @@
         :add-node
         ; A kill mid-join can get the join cancelled and the node banned:
         ; then wipe it and keep it free, so a later add-node retries it. A
-        ; node that joined but serves no CQL yet is a member; wiping it would
-        ; leave a dead normal node nothing removes.
+        ; node the coordinator accepted is a member even with no CQL yet;
+        ; wiping it would leave a dead normal node nothing removes. Stop it
+        ; before reading the journal, so it can't be accepted after we look.
         (try (c/on-nodes test [value]
                          (fn [test node]
                            (sdb/mark-journal!)
@@ -331,29 +338,33 @@
                            (sc/close! (sc/await-open test node))))
              [:added value]
              (catch Exception e
+               (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
                (if (let [j (get (c/on-nodes test [value]
                                             (fn [_ _] (sdb/journal-since-mark)))
                                 value)]
-                     ; Startup can fail before the coordinator accepts the
-                     ; join (no group 0 quorum): not a member either.
-                     (or (re-find sdb/join-refused j)
-                         (and (re-find #"Startup failed" j)
-                              (not (re-find #"coordinator accepted request to join|join: success" j)))))
-                 (do (warn e value "join refused; wiping it")
+                     (and (re-find #"coordinator accepted request to join|join: success" j)
+                          (not (re-find sdb/join-refused j))))
+                 (do (warn e value "no CQL, but joined; restarting it")
+                     (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
+                     [:added value :no-cql])
+                 (do (warn e value "join not accepted; wiping it")
                      (c/on-nodes test [value]
                                  (fn [test node]
                                    (sdb/wipe! db test node)
                                    (sdb/disable!)))
-                     [:add-failed value])
-                 (do (warn e value "no CQL, join not refused")
-                     [:added value :no-cql]))))
+                     [:add-failed value]))))
 
+        ; These block the one nemesis worker for up to remove-timeout, so a
+        ; paused majority would never get its :resume: resume the others
+        ; first. A paused remove target stays paused: that's what we remove.
         :remove-node
-        (with-nodetool-errors
-          (sdb/remove-node! test (:via value) (:node value)))
+        (do (resume-all! test db (:node (:node value)))
+            (with-nodetool-errors
+              (sdb/remove-node! test (:via value) (:node value))))
 
         :decommission-node
-        (with-nodetool-errors (sdb/decommission-node! test value))
+        (do (resume-all! test db nil)
+            (with-nodetool-errors (sdb/decommission-node! test value)))
 
         :wipe-node
         (do (c/on-nodes test [value]
@@ -456,8 +467,8 @@
                 {:partition {:targets [:majorities-ring ...]}}"
   [opts]
   (let [membership (membership-package opts)
-        pkg (->> (nc/nemesis-packages opts)
-                 (concat [membership])
+        ; Membership last: its final re-adds must follow the others' heals.
+        pkg (->> (concat (nc/nemesis-packages opts) [membership])
                  (remove nil?)
                  nc/compose-packages
                  ;periodically-recover

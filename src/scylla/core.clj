@@ -182,13 +182,14 @@
                        (gen/stagger (/ (:rate opts)))
                        (gen/nemesis (:generator nemesis))
                        (gen/time-limit (:time-limit opts)))
-        generator (if-let [fg (:final-generator workload)]
-                    (gen/phases generator
-                                (gen/nemesis (:final-generator nemesis))
-                                (gen/log "Waiting for cluster to recover")
-                                (gen/sleep 10)
-                                (gen/clients fg))
-                    generator)
+        ; The nemesis final generator heals and re-adds removed nodes, with or
+        ; without a workload final phase.
+        generator (gen/phases generator
+                              (gen/nemesis (:final-generator nemesis))
+                              (when-let [fg (:final-generator workload)]
+                                [(gen/log "Waiting for cluster to recover")
+                                 (gen/sleep 10)
+                                 (gen/clients fg)]))
         checker (checker/compose
                   {:perf        (checker/perf {:nemeses (:perf nemesis)})
                    :clock       (checker/clock-plot)

@@ -141,8 +141,10 @@
   Upstream used 5 s and let the command run on while the nemesis wiped the
   node: with Raft topology that leaves a dead host id the coordinator never
   forgets, and every later join or decommission is 'canceled because some
-  required nodes are dead'. So we wait for the operation to finish."
-  600)
+  required nodes are dead'. So we wait for the operation to finish. Successful
+  ones take under 80 s here; past that one is stuck (e.g. on a partition the
+  blocked nemesis can't heal) and the op resolves as not removed."
+  180)
 
 (defn remove-node!
   "Removes a single node, using `via` to execute the remove command. Node is
