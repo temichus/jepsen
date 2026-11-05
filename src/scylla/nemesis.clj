@@ -275,18 +275,20 @@
   (Thread/sleep heal-settle-ms))
 
 (defn- await-down!
-  "Polls `nodetool status` on via, for up to ~60 s, until it no longer shows
-  node up: down, absent, or nodetool failing. Returns via's last entry for
-  node (nil if absent or failing); its :id is fresher than our views'."
+  "Polls `nodetool status` on via, for up to ~60 s, while it shows node up or
+  fails. Returns via's last entry for node, nil only if node is absent; its
+  :id is fresher than our views'."
   [test via node]
   (get (c/on-nodes test [via]
                    (fn [test _]
                      (loop [tries 60]
                        (let [e (->> (try+ (sdb/nodetool-status test)
-                                          (catch Object _ nil))
+                                          (catch Object _
+                                            [{:node node, :status :failed}]))
                                     (filter #(= node (:node %)))
                                     first)]
-                         (if (and (pos? tries) (up? e))
+                         (if (and (pos? tries)
+                                  (#{:up :failed} (:status e)))
                            (do (Thread/sleep 1000)
                                (recur (dec tries)))
                            e)))))
@@ -298,7 +300,7 @@
   (and (sequential? v) (string? (get v 2))))
 
 (defn not-removed?
-  "Is v, a remove or decommission result, one that left the node a member?
+  "Is v, a decommission result, one that left the node a member?
   A timed-out one may still finish, but wiping the node meanwhile leaves a
   dead normal node every later join waits for.
   ponytail: if the timed-out op finishes later, the node is gone but still
@@ -428,7 +430,8 @@
                                     (fn [test node]
                                       (db/start! db test node)
                                       (try (sc/close! (sc/await-open test node))
-                                           (catch Exception _ nil))))]
+                                           (catch Exception e
+                                             (warn e node "no CQL after restart")))))]
           (heal-all! test db target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))
@@ -445,7 +448,8 @@
                           (assoc r 2 "timed out, but gone from status")
                           r))
                       (catch Throwable t
-                        (restart!)
+                        (try (restart!)
+                             (catch Throwable e (.addSuppressed t e)))
                         (throw t)))]
               (when-not (removed? r) (restart!))
               r)))
@@ -479,8 +483,8 @@
         (update this :free disj (:value op))
         this)
 
-      ; We're done removing a node once it's free, or if we know the remove
-      ; definitely failed.
+      ; We're done removing a node once it's free, or once the remove did not
+      ; report success (failed or timed out: the node is still a member).
       :remove-node
       (when (or (not (removed? (:value op')))
                 (free (:node (:node (:value op)))))
