@@ -258,8 +258,10 @@
 (def heal-settle-ms
   "Wait after a heal: the coordinator's failure detector must see healed nodes
   up, else it cancels the request for dead nodes (one 0.1 s after a heal
-  was)."
-  5000)
+  was). Echoes on connections a partition broke time out up to ~9 s after
+  it heals, marking live nodes DOWN; 5 s let that cancel a decommission and
+  reject a join."
+  15000)
 
 (defn- heal-all!
   "Heals the network and SIGCONTs scylla on every node except `except` (resume
@@ -280,8 +282,11 @@
               (fn [test _]
                 (loop [tries 60]
                   (when (and (pos? tries)
+                             ; A failing nodetool ends the wait; the remove
+                             ; then fails as alive and the target restarts.
                              (some #(and (= node (:node %)) (up? %))
-                                   (sdb/nodetool-status test)))
+                                   (try+ (sdb/nodetool-status test)
+                                         (catch Object _ nil))))
                     (Thread/sleep 1000)
                     (recur (dec tries)))))))
 
