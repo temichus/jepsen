@@ -243,15 +243,16 @@
 
 (def heal-settle-ms
   "Wait after a heal: the coordinator's failure detector must see healed nodes
-  up, else it cancels the request for dead nodes (a join 0.1 s after a heal
+  up, else it cancels the request for dead nodes (one 0.1 s after a heal
   was)."
   5000)
 
 (defn- heal-all!
-  "Heals the network and SIGCONTs scylla on every node but except (resume is a
-  no-op where it is not paused), then waits heal-settle-ms. The partition
+  "Heals the network and SIGCONTs scylla on every node except `except` (resume
+  is a no-op where it is not paused), then waits heal-settle-ms. The partition
   package's later :stop-partition is a second, harmless heal."
   [test db except]
+  (info "Healing network and resuming nodes before a topology op")
   (net/heal! (:net test) test)
   (c/on-nodes test (remove #{except} (:nodes test))
               (fn [test node] (db/resume! db test node)))
@@ -338,7 +339,11 @@
         ; partitioned away, and they block the one nemesis worker (up to
         ; remove-timeout, ~120 s await-open for a join), so its :resume or
         ; :stop-partition never comes: heal first. A paused remove target
-        ; stays paused: that's what we remove.
+        ; stays paused: that's what we remove; one down only from a partition
+        ; is healed and its remove fails as alive.
+        ; ponytail: killed nodes stay down and still cancel these ops; with
+        ; kill on, SCYLLADB-4753 blocks the drains anyway. Start them (not
+        ; free ones) here if kill+membership coverage matters.
         :add-node
         ; A kill mid-join can get the join cancelled and the node banned:
         ; then wipe it and keep it free, so a later add-node retries it. A
