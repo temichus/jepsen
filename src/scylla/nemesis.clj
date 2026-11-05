@@ -195,7 +195,7 @@
                                         (not= via (:node node)))]
                          {:via via
                           :node (select-keys node [:node :id])}))
-                     ; Members which think they're up, as decommission-op.
+                     ; Members which think they're up, as up-nodes, with ids.
                      (let [up (for [[via node-view] (:node-views state)
                                     node            node-view
                                     :when (and (= via (:node node))
@@ -275,20 +275,27 @@
   (Thread/sleep heal-settle-ms))
 
 (defn- await-down!
-  "Polls `nodetool status` on via until it shows node down, for up to 60 s.
-  If it never does, the remove fails as alive."
+  "Polls `nodetool status` on via, for up to ~60 s, until it no longer shows
+  node up: down, absent, or nodetool failing. Returns via's last entry for
+  node (nil if absent or failing); its :id is fresher than our views'."
   [test via node]
-  (c/on-nodes test [via]
-              (fn [test _]
-                (loop [tries 60]
-                  (when (and (pos? tries)
-                             ; A failing nodetool ends the wait; the remove
-                             ; then fails as alive and the target restarts.
-                             (some #(and (= node (:node %)) (up? %))
-                                   (try+ (sdb/nodetool-status test)
-                                         (catch Object _ nil))))
-                    (Thread/sleep 1000)
-                    (recur (dec tries)))))))
+  (get (c/on-nodes test [via]
+                   (fn [test _]
+                     (loop [tries 60]
+                       (let [e (->> (try+ (sdb/nodetool-status test)
+                                          (catch Object _ nil))
+                                    (filter #(= node (:node %)))
+                                    first)]
+                         (if (and (pos? tries) (up? e))
+                           (do (Thread/sleep 1000)
+                               (recur (dec tries)))
+                           e)))))
+       via))
+
+(defn removed?
+  "Did v, a remove-node! or decommission-node! result, report success?"
+  [v]
+  (and (sequential? v) (string? (get v 2))))
 
 (defn not-removed?
   "Is v, a remove or decommission result, one that left the node a member?
@@ -410,20 +417,38 @@
 
         ; A :kill? target is live: kill it and let `via` see it down. If the
         ; remove then fails or times out, start it again: a dead member
-        ; cancels every later topology op.
+        ; cancels every later topology op. A timed-out remove whose target
+        ; is already gone from via's status counts as removed.
+        ; ponytail: one that times out and finishes later bans the restarted
+        ; node, still counted a member, as `not-removed?` notes.
         :remove-node
         (let [target (:node (:node value))
-              on-target (fn [f] (c/on-nodes test [target]
-                                            (fn [test node] (f db test node))))
-              r (do (heal-all! test db target)
-                    (when (:kill? value)
-                      (on-target db/kill!)
-                      (await-down! test (:via value) target))
-                    (with-nodetool-errors
-                      (sdb/remove-node! test (:via value) (:node value))))]
-          (when (and (:kill? value) (not (string? (get r 2))))
-            (on-target db/start!))
-          r)
+              via    (:via value)
+              restart! #(c/on-nodes test [target]
+                                    (fn [test node]
+                                      (db/start! db test node)
+                                      (try (sc/close! (sc/await-open test node))
+                                           (catch Exception _ nil))))]
+          (heal-all! test db target)
+          (if-not (:kill? value)
+            (with-nodetool-errors (sdb/remove-node! test via (:node value)))
+            (let [r (try
+                      (c/on-nodes test [target]
+                                  (fn [test node] (db/kill! db test node)))
+                      (let [e (await-down! test via target)
+                            r (with-nodetool-errors
+                                (sdb/remove-node!
+                                  test via
+                                  (merge (:node value) (select-keys e [:id]))))]
+                        (if (and (= :timeout (get r 2))
+                                 (nil? (await-down! test via target)))
+                          (assoc r 2 "timed out, but gone from status")
+                          r))
+                      (catch Throwable t
+                        (restart!)
+                        (throw t)))]
+              (when-not (removed? r) (restart!))
+              r)))
 
         :decommission-node
         (do (heal-all! test db nil)
@@ -457,12 +482,7 @@
       ; We're done removing a node once it's free, or if we know the remove
       ; definitely failed.
       :remove-node
-      (when (or (#{:conn-refused
-                   :host-id-not-found
-                   :node-considered-alive
-                   :remove-in-progress}
-                  (:value op'))
-                (not-removed? (:value op'))
+      (when (or (not (removed? (:value op')))
                 (free (:node (:node (:value op)))))
         this)
 

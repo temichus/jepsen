@@ -19,7 +19,12 @@
 (deftest timed-out-remove-resolves
   (let [s  (n/map->MembershipState {:free #{}})
         op {:f :remove-node, :value {:node {:node "n2"}}}]
-    (is (some? (ms/resolve-op s nil [op {:value [:removed "n2" :timeout]}])))))
+    (is (some? (ms/resolve-op s nil [op {:value [:removed "n2" :timeout]}])))
+    (testing "any failure shape resolves; success waits for the wipe"
+      (doseq [v [:conn-refused :repair-failed [:nodetool-failed "x"]
+                 [:failed-to-repair-sub-ranges "x"]]]
+        (is (some? (ms/resolve-op s nil [op {:value v}])) (pr-str v)))
+      (is (nil? (ms/resolve-op s nil [op {:value [:removed "n2" ""]}]))))))
 
 (deftest remove-op-kills-a-live-member-when-none-is-down
   (let [up    (fn [n] {:node n, :id (str n "-id"), :status :up})
