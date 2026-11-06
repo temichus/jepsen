@@ -291,11 +291,11 @@
         (catch Object _ false)))
 
 (defn- status-via
-  "via's `nodetool status`, nil if nodetool fails."
+  "via's `nodetool status`, nil if nodetool fails or takes over 30 s."
   [test via]
   (get (c/on-nodes test [via]
                    (fn [test _]
-                     (try+ (sdb/nodetool-status test)
+                     (try+ (sdb/nodetool-status test :timeout 30)
                            (catch Object _ nil))))
        via))
 
@@ -316,18 +316,18 @@
 
 (defn dead-to-start
   "Which `dead` members to start. A timed-out decommission or remove counts as
-  a member but may have finished since, banning the node: start only those a
-  live normal member other than `except` lists, not excluded. `status` maps a
-  via to its `nodetool status`, nil if that fails; then, or with no live via,
-  start nothing."
+  a member but may have finished since, banning the node: start only those
+  every live normal member other than `except` that answers lists, not
+  excluded. `status` maps a via to its `nodetool status`, nil if that fails;
+  if none answers, start nothing."
   [state test except dead status]
-  (when-let [via (->> (normal-members state)
-                      (map :node)
-                      (filter (set (members state test)))
-                      (remove (conj (set dead) except))
-                      first)]
-    (let [s (status via)]
-      (filter #(true? (listed-in s %)) dead))))
+  (let [answers (->> (normal-members state)
+                     (map :node)
+                     (filter (set (members state test)))
+                     (remove (conj (set dead) except))
+                     (keep status))]
+    (when (seq answers)
+      (filter (fn [n] (every? #(listed-in % n) answers)) dead))))
 
 (defn- start-and-await!
   "Starts scylla on the current node, unless disable!d, then polls its unit
@@ -549,7 +549,11 @@
         :remove-node
         (let [target (:node (:node value))
               via    (:via value)
-              restart! #(c/on-nodes test [target] start-and-await!)]
+              ; Only if the others still list it: the remove may have
+              ; finished, banning it.
+              restart! #(c/on-nodes test (dead-to-start this test nil [target]
+                                                        (partial status-via test))
+                                    start-and-await!)]
           (heal-all! test db this target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))

@@ -83,3 +83,22 @@
       (is (empty? (n/dead-to-start s test "n1" ["n2" "n3"]
                                    (st [{:node "n3", :status :down}]))))
       (is (empty? @asked)))))
+
+(deftest dead-to-start-needs-every-answer
+  (let [up    (fn [n] {:node n, :id n, :status :up, :state :normal})
+        s     (n/map->MembershipState
+                {:free #{}, :node-views (into {} (for [n ["n1" "n2" "n3"]]
+                                                   [n [(up n)]]))})
+        test  {:nodes ["n1" "n2" "n3"]}
+        n3    [{:node "n3", :status :down}]]
+    (testing "members disagree: not started"
+      (is (empty? (n/dead-to-start s test nil ["n3"] {"n1" n3, "n2" []}))))
+    (testing "one fails, the other lists it: started"
+      (is (= ["n3"] (n/dead-to-start s test nil ["n3"] {"n1" nil, "n2" n3}))))
+    (testing "a member with a pending decommission is never asked"
+      (let [asked (atom [])]
+        (is (= ["n3"] (n/dead-to-start
+                        (assoc s :pending #{[{:f :decommission-node, :value "n2"}]})
+                        test nil ["n3"]
+                        (fn [via] (swap! asked conj via) (when (= "n1" via) n3)))))
+        (is (= ["n1"] @asked))))))

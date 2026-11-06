@@ -89,9 +89,10 @@
 
 (defn nodetool-status*
   "Returns the current nodetool status, as visible to the currently bound node,
-  as a sequence of parsed maps."
-  []
-  (let [raw    (c/su (c/exec :nodetool :status))
+  as a sequence of parsed maps. `prefix`, e.g. [:timeout 30], wraps the
+  command."
+  [& prefix]
+  (let [raw    (c/su (apply c/exec (concat prefix [:nodetool :status])))
         salient (->> raw
                     str/split-lines
                     (remove nodetool-status-ignorable-line?))
@@ -106,11 +107,11 @@
 (defn nodetool-status
   "Like nodetool-status*, but enriches node maps with a :node field
   corresponding to their Jepsen node."
-  [test]
+  [test & prefix]
   (let [addresses->nodes (->> (:nodes test)
                               (map (juxt dns-resolve identity))
                               (into {}))]
-    (->> (nodetool-status*)
+    (->> (apply nodetool-status* prefix)
          (map (fn [m]
                 (let [node (addresses->nodes (:address m))]
                   (assert node)
