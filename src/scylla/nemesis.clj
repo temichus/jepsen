@@ -3,6 +3,7 @@
   (:require [clojure.pprint :refer [pprint]]
             [clojure.tools.logging :refer [info warn]]
             [clojure.set :as set]
+            [clojure.string :as str]
             [scylla [client :as client]
                     [db :as sdb]]
             [scylla.sc [client :as sc]]
@@ -14,6 +15,7 @@
                     [nemesis :as n]
                     [util :as util :refer [rand-nth-empty
                                            pprint-str]]]
+            [jepsen.control.util :as cu]
             [jepsen.nemesis [time :as nt]
                             [membership :as membership]
                             [combined :as nc]]
@@ -275,41 +277,87 @@
   reject a join."
   15000)
 
+(defn- unit-state
+  "The scylla unit's state on the current node, e.g. \"active\", \"failed\"."
+  []
+  (try+ (c/exec :systemctl :is-active :scylla-server)
+        (catch [:type :jepsen.control/nonzero-exit] e
+          (str/trim (:out e)))))
+
 (defn- active?
   "Is the scylla unit active on the current node?"
   []
-  (try+ (c/exec :systemctl :is-active :scylla-server)
-        true
+  (try+ (= "active" (unit-state))
         (catch Object _ false)))
 
-(defn- listed?
-  "Does via's `nodetool status` list node, not excluded? True if nodetool
-  fails."
-  [test via node]
+(defn- status-via
+  "via's `nodetool status`, nil if nodetool fails."
+  [test via]
   (get (c/on-nodes test [via]
                    (fn [test _]
-                     (try+ (boolean (some #(and (= node (:node %))
-                                                (not= :excluded (:status %)))
-                                          (sdb/nodetool-status test)))
-                           (catch Object _ true))))
+                     (try+ (sdb/nodetool-status test)
+                           (catch Object _ nil))))
        via))
 
+(defn- listed-in
+  "Does status, a `nodetool status`, list node, not excluded? Nil if status is nil
+  (nodetool failed)."
+  [status node]
+  (when status
+    (boolean (some #(and (= node (:node %))
+                         (not= :excluded (:status %)))
+                   status))))
+
+(defn- listed?
+  "Does via's `nodetool status` list node, not excluded? Nil if nodetool
+  fails."
+  [test via node]
+  (listed-in (status-via test via) node))
+
+(defn dead-to-start
+  "Which `dead` members to start. A timed-out decommission or remove counts as
+  a member but may have finished since, banning the node: start only those a
+  live normal member other than `except` lists, not excluded. `status` maps a
+  via to its `nodetool status`, nil if that fails; then, or with no live via,
+  start nothing."
+  [state test except dead status]
+  (when-let [via (->> (normal-members state)
+                      (map :node)
+                      (filter (set (members state test)))
+                      (remove (conj (set dead) except))
+                      first)]
+    (let [s (status via)]
+      (filter #(true? (listed-in s %)) dead))))
+
 (defn- start-and-await!
-  "Starts scylla on the current node and waits for CQL, logging failures. The
-  unit waits for READY with a 1y timeout, so a node that can't boot (e.g.
-  SCYLLADB-5657) would hang the nemesis: don't block, await-open is the bound."
+  "Starts scylla on the current node, unless disable!d, then polls its unit
+  for up to ~120 s until active (Type=notify: READY comes once CQL serves) or
+  failed (Restart=on-abnormal doesn't retry a failed start, e.g.
+  SCYLLADB-5657). --no-block: the unit waits for READY with a 1y timeout.
+  Logs failures."
   [test node]
-  (try (c/su (c/exec :systemctl :start :--no-block :scylla-server))
-       (sc/close! (sc/await-open test node))
+  (try (if-not (cu/exists? sdb/scylla-bin)
+         (info node "not starting ScyllaDB: disabled")
+         (do (c/su (c/exec :systemctl :start :--no-block :scylla-server))
+             ; Sleep first: until the queued job runs, a crash-looped unit
+             ; still reads failed.
+             (let [s (loop [tries 60]
+                       (Thread/sleep 2000)
+                       (let [s (unit-state)]
+                         (if (or (#{"active" "failed"} s) (= 1 tries))
+                           s
+                           (recur (dec tries)))))]
+               (when-not (= "active" s)
+                 (warn node "scylla unit" s "after start")))))
        (catch Exception e
          (warn e node "start failed"))))
 
 (defn- heal-all!
   "Heals the network and SIGCONTs scylla on every node except `except` (resume
   is a no-op where it is not paused), starts scylla on members except `except`
-  whose unit isn't active (the kill nemesis leaves them dead), then waits
-  heal-settle-ms. The partition package's later :stop-partition is a second,
-  harmless heal."
+  whose unit isn't active (the kill nemesis leaves them dead) and that
+  `dead-to-start` allows, then waits heal-settle-ms. The partition package's
+  later :stop-partition is a second, harmless heal."
   [test db state except]
   (info "Healing network and resuming nodes before a topology op")
   (net/heal! (:net test) test)
@@ -318,14 +366,9 @@
   (let [dead (->> (c/on-nodes test (remove #{except} (members state test))
                               (fn [_ _] (active?)))
                   (remove val)
-                  (map key))
-        ups  (map :node (normal-members state))
-        ; A timed-out decommission or remove counts as a member but may have
-        ; finished since, banning the node: ask another member first.
-        dead (filter #(let [via (rand-nth-empty (remove #{%} ups))]
-                        (or (nil? via) (listed? test via %)))
-                     dead)]
-    (c/on-nodes test dead (fn [test node] (start-and-await! test node))))
+                  (map key))]
+    (c/on-nodes test (dead-to-start state test except dead #(status-via test %))
+                start-and-await!))
   (Thread/sleep heal-settle-ms))
 
 (defn- await-down!
@@ -546,7 +589,7 @@
         (do (heal-all! test db this nil)
             (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
                   via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
-              (if (and (= :timeout (get r 2)) via (not (listed? test via value)))
+              (if (and (= :timeout (get r 2)) via (false? (listed? test via value)))
                 (assoc r 2 "timed out, but gone from status")
                 r)))
 

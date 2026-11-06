@@ -62,3 +62,24 @@
     (is (empty? (n/members s {:nodes ["n3"]})))
     (is (some? (ms/resolve-op s nil [op op'])) "resolved, so dropped from :pending")
     (is (= ["n3"] (n/members (assoc s :pending #{}) {:nodes ["n3"]})))))
+
+(deftest dead-to-start-asks-a-live-member
+  (let [up    (fn [n] {:node n, :id n, :status :up, :state :normal})
+        s     (n/map->MembershipState
+                {:free #{}, :node-views (into {} (for [n ["n1" "n2" "n3"]]
+                                                   [n [(up n)]]))})
+        test  {:nodes ["n1" "n2" "n3"]}
+        asked (atom [])
+        st    (fn [entries] (fn [via] (swap! asked conj via) entries))]
+    (testing "listed, from a live via; an unlisted one isn't started"
+      (is (= ["n3"] (n/dead-to-start s test nil ["n1" "n3"]
+                                     (st [{:node "n3", :status :down}]))))
+      (is (= ["n2"] @asked)))
+    (testing "excluded, absent, or nodetool failed"
+      (doseq [e [[{:node "n3", :status :excluded}] [] nil]]
+        (is (empty? (n/dead-to-start s test nil ["n3"] (st e))) (pr-str e))))
+    (testing "no live via: except and dead nodes aren't asked"
+      (reset! asked [])
+      (is (empty? (n/dead-to-start s test "n1" ["n2" "n3"]
+                                   (st [{:node "n3", :status :down}]))))
+      (is (empty? @asked)))))
