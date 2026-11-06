@@ -171,6 +171,17 @@
   (when-let [n (rand-nth-empty (up-nodes state))]
     {:type :info, :f :repair-node, :value n}))
 
+(defn- normal-members
+  "Members which think they're up and normal, as {:node, :id}."
+  [state]
+  (for [[via node-view] (:node-views state)
+        node            node-view
+        :when (and (= via (:node node))
+                   (up? node)
+                   (= :normal (:state node))
+                   (not (contains? (:free state) via)))]
+    (select-keys node [:node :id])))
+
 (defn remove-op
   "Generates a remove node op for a membership state, if possible. Views are
   refreshed rarely and pauses are short, so a view rarely shows a node down:
@@ -197,14 +208,7 @@
                           :node (select-keys node [:node :id])}))
                      ; Members which think they're up and normal, with ids:
                      ; killing a joiner makes it unstartable (see :add-node).
-                     (let [up (for [[via node-view] (:node-views state)
-                                    node            node-view
-                                    :when (and (= via (:node node))
-                                               (up? node)
-                                               (= :normal (:state node))
-                                               (not (contains? (:free state)
-                                                               via)))]
-                                (select-keys node [:node :id]))]
+                     (let [up (normal-members state)]
                        (when-let [node (rand-nth-empty up)]
                          (when-let [via (rand-nth-empty
                                           (remove #{(:node node)}
@@ -296,6 +300,16 @@
                            e)))))
        via))
 
+(defn- listed?
+  "Does via's `nodetool status` list node? True if nodetool fails."
+  [test via node]
+  (get (c/on-nodes test [via]
+                   (fn [test _]
+                     (try+ (boolean (some #(= node (:node %))
+                                          (sdb/nodetool-status test)))
+                           (catch Object _ true))))
+       via))
+
 (defn- others-down
   "Nodes other than node that via's `nodetool status` doesn't show up; via
   itself if nodetool fails."
@@ -317,10 +331,9 @@
 (defn not-removed?
   "Is v, a decommission result, one that left the node a member?
   A timed-out one may still finish, but wiping the node meanwhile leaves a
-  dead normal node every later join waits for.
-  ponytail: if the timed-out op finishes later, the node is gone but still
-  counted a member until the next setup! rejoins it; check :view if that
-  starves the nemesis."
+  dead normal node every later join waits for. invoke! checks another
+  member's status once at the timeout.
+  ponytail: one that finishes after that check is still counted a member."
   [v]
   (and (sequential? v)
        (or (= :timeout (last v))
@@ -490,9 +503,18 @@
                 (when-not (removed? r) (restart!))
                 r))))
 
+        ; A timed-out decommission the coordinator finished anyway leaves
+        ; the node running but banned, its group0 view frozen with every
+        ; peer dead (seen after a clock step back). Used as a removenode via,
+        ; it fails every remove. If another member no longer lists it, count
+        ; it decommissioned, so it is wiped like any other.
         :decommission-node
         (do (heal-all! test db nil)
-            (with-nodetool-errors (sdb/decommission-node! test value)))
+            (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
+                  via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
+              (if (and (= :timeout (get r 2)) via (not (listed? test via value)))
+                (assoc r 2 "timed out, but gone from status")
+                r)))
 
         :wipe-node
         (do (c/on-nodes test [value]
