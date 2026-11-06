@@ -330,9 +330,11 @@
       (filter (fn [n] (every? #(listed-in % n) answers)) dead))))
 
 (defn blocking-down
-  "Which `dead` members block a topology op: those `dead-to-start` allows, so
-  a ghost (removed in Scylla, a member here) doesn't block every later op;
-  all of them if no member answers, e.g. after a kill :all."
+  "Which `dead` members block a topology op: those `dead-to-start` allows;
+  all of them if no member answers, e.g. after a kill :all. A dead node that
+  any answering member doesn't list, or lists excluded, is a ghost (removed
+  in Scylla, a member here) and doesn't block: a banned node never starts
+  again, so it would block every later op."
   [state test except dead status]
   (when (seq dead)
     (or (dead-to-start state test except dead status) dead)))

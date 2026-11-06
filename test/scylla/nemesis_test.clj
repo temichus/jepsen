@@ -78,13 +78,14 @@
       (is (= ["n3"] (n/dead-to-start s test nil ["n1" "n3"]
                                      (st [{:node "n3", :status :down}]))))
       (is (= ["n2"] @asked)))
-    (testing "excluded, absent, or nodetool failed"
-      (doseq [e [[{:node "n3", :status :excluded}] [] nil]]
-        (is (empty? (n/dead-to-start s test nil ["n3"] (st e))) (pr-str e))))
+    (testing "excluded or absent: (); nodetool failed, nobody answered: nil"
+      (doseq [e [[{:node "n3", :status :excluded}] []]]
+        (is (= () (n/dead-to-start s test nil ["n3"] (st e))) (pr-str e)))
+      (is (nil? (n/dead-to-start s test nil ["n3"] (st nil)))))
     (testing "no live via: except and dead nodes aren't asked"
       (reset! asked [])
-      (is (empty? (n/dead-to-start s test "n1" ["n2" "n3"]
-                                   (st [{:node "n3", :status :down}]))))
+      (is (nil? (n/dead-to-start s test "n1" ["n2" "n3"]
+                                 (st [{:node "n3", :status :down}]))))
       (is (empty? @asked)))))
 
 (deftest dead-to-start-needs-every-answer
@@ -117,7 +118,10 @@
                                      (constantly [{:node "n3", :status :down}])))))
     (testing "a ghost, unlisted or excluded, doesn't block"
       (doseq [e [[] [{:node "n3", :status :excluded}]]]
-        (is (empty? (n/blocking-down s test nil ["n3"] (constantly e))) (pr-str e))))
+        (is (empty? (n/blocking-down s test nil ["n3"] (constantly e))) (pr-str e)))
+      (is (= () (n/blocking-down s test nil ["n3"]
+                                 {"n1" [{:node "n3", :status :down}], "n2" []}))
+          "members disagree"))
     (testing "nobody answers: all block"
       (is (= ["n3"] (n/blocking-down s test nil ["n3"] (constantly nil))))
       (is (= ["n2" "n3"] (n/blocking-down s test "n1" ["n2" "n3"]
