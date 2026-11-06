@@ -352,24 +352,33 @@
        (catch Exception e
          (warn e node "start failed"))))
 
+(defn- down-members
+  "Members other than except whose scylla unit isn't active."
+  [test state except]
+  (->> (c/on-nodes test (remove #{except} (members state test))
+                   (fn [_ _] (active?)))
+       (remove val)
+       (map key)))
+
 (defn- heal-all!
   "Heals the network and SIGCONTs scylla on every node except `except` (resume
   is a no-op where it is not paused), starts scylla on members except `except`
   whose unit isn't active (the kill nemesis leaves them dead) and that
   `dead-to-start` allows, then waits heal-settle-ms. The partition package's
-  later :stop-partition is a second, harmless heal."
+  later :stop-partition is a second, harmless heal. Returns the members
+  other than `except` still down: after a kill :all, or with the only live
+  member still booting, nobody answers `dead-to-start` and none is started."
   [test db state except]
   (info "Healing network and resuming nodes before a topology op")
   (net/heal! (:net test) test)
   (c/on-nodes test (remove #{except} (:nodes test))
               (fn [test node] (db/resume! db test node)))
-  (let [dead (->> (c/on-nodes test (remove #{except} (members state test))
-                              (fn [_ _] (active?)))
-                  (remove val)
-                  (map key))]
-    (c/on-nodes test (dead-to-start state test except dead #(status-via test %))
-                start-and-await!))
-  (Thread/sleep heal-settle-ms))
+  (c/on-nodes test (dead-to-start state test except
+                                  (down-members test state except)
+                                  #(status-via test %))
+              start-and-await!)
+  (Thread/sleep heal-settle-ms)
+  (down-members test state except))
 
 (defn- await-down!
   "Polls `nodetool status` on via, for up to ~60 s, while it shows node up or
@@ -423,7 +432,7 @@
   [v]
   (and (sequential? v)
        (or (= :timeout (last v))
-           (= :nodetool-failed (first v)))))
+           (#{:nodetool-failed :not-decommissioned} (first v)))))
 
 ; `free` is a set of nodes we've removed from the cluster and destroyed data
 ; on.
@@ -505,37 +514,40 @@
         ; it before it reaches NORMAL makes every later start fail ("no entry
         ; for request id"), so leave an accepted one running. Otherwise stop
         ; it and read the journal again: it may have been accepted meanwhile.
-        (do (heal-all! test db this nil)
-            (try (c/on-nodes test [value]
-                             (fn [test node]
-                               (sdb/mark-journal!)
-                               (sdb/enable!)
-                               (sdb/rejoin-seeds! test node)
-                               (db/start! db test node)
-                               (sc/close! (sc/await-open test node))))
-                 [:added value]
-                 (catch Exception e
-                   (let [joined? #(let [j (get (c/on-nodes test [value]
-                                                           (fn [_ _] (sdb/journal-since-mark)))
-                                               value)]
-                                    (and (re-find #"coordinator accepted request to join|join: success" j)
-                                         (not (re-find sdb/join-refused j))))]
-                     (if (joined?)
-                       (do (warn e value "no CQL, but joined; leaving it running")
-                           [:added value :no-cql])
-                       (do (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
-                           (if (joined?)
-                             (do (warn e value "no CQL, joined as we killed it; restarting it")
-                                 (try (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
-                                      (catch Exception e
-                                        (warn e value "restart failed")))
-                                 [:added value :no-cql])
-                             (do (warn e value "join not accepted; wiping it")
-                                 (c/on-nodes test [value]
-                                             (fn [test node]
-                                               (sdb/wipe! db test node)
-                                               (sdb/disable!)))
-                                 [:add-failed value]))))))))
+        ; With a member still down the joiner hangs or fails with no raft
+        ; quorum: don't try, the node stays free.
+        (if-let [down (seq (heal-all! test db this nil))]
+          [:add-failed value :members-down (vec down)]
+          (try (c/on-nodes test [value]
+                           (fn [test node]
+                             (sdb/mark-journal!)
+                             (sdb/enable!)
+                             (sdb/rejoin-seeds! test node)
+                             (db/start! db test node)
+                             (sc/close! (sc/await-open test node))))
+               [:added value]
+               (catch Exception e
+                 (let [joined? #(let [j (get (c/on-nodes test [value]
+                                                         (fn [_ _] (sdb/journal-since-mark)))
+                                             value)]
+                                  (and (re-find #"coordinator accepted request to join|join: success" j)
+                                       (not (re-find sdb/join-refused j))))]
+                   (if (joined?)
+                     (do (warn e value "no CQL, but joined; leaving it running")
+                         [:added value :no-cql])
+                     (do (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
+                         (if (joined?)
+                           (do (warn e value "no CQL, joined as we killed it; restarting it")
+                               (try (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
+                                    (catch Exception e
+                                      (warn e value "restart failed")))
+                               [:added value :no-cql])
+                           (do (warn e value "join not accepted; wiping it")
+                               (c/on-nodes test [value]
+                                           (fn [test node]
+                                             (sdb/wipe! db test node)
+                                             (sdb/disable!)))
+                               [:add-failed value]))))))))
 
         ; A :kill? target is live: kill it and let `via` see it down. If the
         ; remove then fails or times out, start it again: a dead member
@@ -588,14 +600,16 @@
         ; the node running but banned, its group0 view frozen with every
         ; peer dead (seen after a clock step back). Used as a removenode via,
         ; it fails every remove. If another member no longer lists it, count
-        ; it decommissioned, so it is wiped like any other.
+        ; it decommissioned, so it is wiped like any other. With another
+        ; member still down it would be cancelled: don't try.
         :decommission-node
-        (do (heal-all! test db this nil)
-            (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
-                  via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
-              (if (and (= :timeout (get r 2)) via (false? (listed? test via value)))
-                (assoc r 2 "timed out, but gone from status")
-                r)))
+        (if-let [down (seq (remove #{value} (heal-all! test db this nil)))]
+          [:not-decommissioned value (vec down)]
+          (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
+                via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
+            (if (and (= :timeout (get r 2)) via (false? (listed? test via value)))
+              (assoc r 2 "timed out, but gone from status")
+              r)))
 
         :wipe-node
         (do (c/on-nodes test [value]

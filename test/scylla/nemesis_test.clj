@@ -8,13 +8,16 @@
         op {:f :add-node, :value "n1"}]
     (is (= #{} (:free (ms/resolve-op s nil [op {:value [:added "n1"]}]))))
     (is (= #{} (:free (ms/resolve-op s nil [op {:value [:added "n1" :no-cql]}]))))
-    (is (= #{"n1"} (:free (ms/resolve-op s nil [op {:value [:add-failed "n1"]}]))))))
+    (is (= #{"n1"} (:free (ms/resolve-op s nil [op {:value [:add-failed "n1"]}]))))
+    (is (= #{"n1"} (:free (ms/resolve-op s nil [op {:value [:add-failed "n1" :members-down ["n2"]]}]))))))
 
 (deftest failed-decommission-resolves-without-freeing
   (let [s  (n/map->MembershipState {:free #{}})
         op {:f :decommission-node, :value "n2"}]
     (is (some? (ms/resolve-op s nil [op {:value [:decommissioned "n2" :timeout]}])))
     (is (some? (ms/resolve-op s nil [op {:value [:nodetool-failed "Canceled"]}])))
+    (is (some? (ms/resolve-op s nil [op {:value [:not-decommissioned "n2" ["n3"]]}])))
+    (is (not (n/removed? [:not-decommissioned "n2" ["n3"]])))
     (is (nil? (ms/resolve-op s nil [op {:value [:decommissioned "n2" "ok"]}])))))
 
 (deftest timed-out-remove-resolves
