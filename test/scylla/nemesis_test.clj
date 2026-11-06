@@ -47,3 +47,10 @@
     (testing "not while another removal is pending"
       (is (nil? (n/remove-op
                   (assoc s :pending #{[{:f :decommission-node, :value "n1"}]})))))))
+
+(deftest members-excludes-free-and-leaving-nodes
+  (let [s (n/map->MembershipState
+            {:free    #{"n1"}
+             :pending #{[{:f :remove-node, :value {:node {:node "n2"}}}]
+                        [{:f :decommission-node, :value "n3"}]}})]
+    (is (= ["n4" "n5"] (n/members s {:nodes ["n1" "n2" "n3" "n4" "n5"]})))))

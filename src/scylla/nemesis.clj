@@ -154,6 +154,12 @@
                           (map :value)
                           set)))
 
+(defn members
+  "Nodes still in the cluster: neither free nor being removed or
+  decommissioned. Only these may be started: a wiped node would join."
+  [state test]
+  (remove (removed-or-free-nodes state) (:nodes test)))
+
 (defn up-nodes
   "Takes a state, and yields a collection of nodes which are part of the
   cluster, and think they're up."
@@ -269,15 +275,33 @@
   reject a join."
   15000)
 
+(defn- active?
+  "Is the scylla unit active on the current node?"
+  []
+  (try+ (c/exec :systemctl :is-active :scylla-server)
+        true
+        (catch Object _ false)))
+
 (defn- heal-all!
   "Heals the network and SIGCONTs scylla on every node except `except` (resume
-  is a no-op where it is not paused), then waits heal-settle-ms. The partition
-  package's later :stop-partition is a second, harmless heal."
-  [test db except]
+  is a no-op where it is not paused), starts scylla on members except `except`
+  whose unit isn't active (the kill nemesis leaves them dead), then waits
+  heal-settle-ms. The partition package's later :stop-partition is a second,
+  harmless heal."
+  [test db state except]
   (info "Healing network and resuming nodes before a topology op")
   (net/heal! (:net test) test)
   (c/on-nodes test (remove #{except} (:nodes test))
               (fn [test node] (db/resume! db test node)))
+  (c/on-nodes test (remove #{except} (members state test))
+              (fn [test node]
+                (when-not (active?)
+                  ; Bounded by await-open; a node that can't start (e.g.
+                  ; SCYLLADB-5657) stays down and the op runs anyway.
+                  (try (db/start! db test node)
+                       (sc/close! (sc/await-open test node))
+                       (catch Exception e
+                         (warn e node "start before topology op failed"))))))
   (Thread/sleep heal-settle-ms))
 
 (defn- await-down!
@@ -322,11 +346,7 @@
                                                [{:node via, :status :failed}]))))
                          via)
                     (remove #(= node (:node %))))
-        dead   (->> (c/on-nodes test (map :node others)
-                                (fn [_ _]
-                                  (try+ (c/exec :systemctl :is-active :scylla-server)
-                                        true
-                                        (catch Object _ false))))
+        dead   (->> (c/on-nodes test (map :node others) (fn [_ _] (active?)))
                     (remove val)
                     (map key))]
     (distinct (concat (->> others (remove #(= :up (:status %))) (map :node))
@@ -418,10 +438,8 @@
         ; remove-timeout, ~120 s await-open for a join), so its :resume or
         ; :stop-partition never comes: heal first. A paused remove target
         ; stays paused: that's what we remove; one down only from a partition
-        ; is healed and its remove fails as alive.
-        ; ponytail: killed nodes stay down and still cancel these ops; with
-        ; kill on, SCYLLADB-4753 blocks the drains anyway. Start them (not
-        ; free ones) here if kill+membership coverage matters.
+        ; is healed and its remove fails as alive. Killed members are started
+        ; too, except the remove target.
         :add-node
         ; A kill mid-join can get the join cancelled and the node banned:
         ; then wipe it and keep it free, so a later add-node retries it. A
@@ -430,7 +448,7 @@
         ; it before it reaches NORMAL makes every later start fail ("no entry
         ; for request id"), so leave an accepted one running. Otherwise stop
         ; it and read the journal again: it may have been accepted meanwhile.
-        (do (heal-all! test db nil)
+        (do (heal-all! test db this nil)
             (try (c/on-nodes test [value]
                              (fn [test node]
                                (sdb/mark-journal!)
@@ -482,7 +500,7 @@
                                            (sc/close! (sc/await-open test node))
                                            (catch Exception e
                                              (warn e node "restart failed")))))]
-          (heal-all! test db target)
+          (heal-all! test db this target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))
             ; Never kill a second member: with another one not up for via,
@@ -518,7 +536,7 @@
         ; it fails every remove. If another member no longer lists it, count
         ; it decommissioned, so it is wiped like any other.
         :decommission-node
-        (do (heal-all! test db nil)
+        (do (heal-all! test db this nil)
             (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
                   via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
               (if (and (= :timeout (get r 2)) via (not (listed? test via value)))
