@@ -54,3 +54,11 @@
              :pending #{[{:f :remove-node, :value {:node {:node "n2"}}}]
                         [{:f :decommission-node, :value "n3"}]}})]
     (is (= ["n4" "n5"] (n/members s {:nodes ["n1" "n2" "n3" "n4" "n5"]})))))
+
+(deftest timed-out-decommission-counts-as-member
+  (let [op  {:f :decommission-node, :value "n3"}
+        op' {:value [:decommissioned "n3" :timeout]}
+        s   (n/map->MembershipState {:free #{}, :pending #{[op op']}})]
+    (is (empty? (n/members s {:nodes ["n3"]})))
+    (is (some? (ms/resolve-op s nil [op op'])) "resolved, so dropped from :pending")
+    (is (= ["n3"] (n/members (assoc s :pending #{}) {:nodes ["n3"]})))))

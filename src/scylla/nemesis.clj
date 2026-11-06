@@ -282,6 +282,28 @@
         true
         (catch Object _ false)))
 
+(defn- listed?
+  "Does via's `nodetool status` list node, not excluded? True if nodetool
+  fails."
+  [test via node]
+  (get (c/on-nodes test [via]
+                   (fn [test _]
+                     (try+ (boolean (some #(and (= node (:node %))
+                                                (not= :excluded (:status %)))
+                                          (sdb/nodetool-status test)))
+                           (catch Object _ true))))
+       via))
+
+(defn- start-and-await!
+  "Starts scylla on the current node and waits for CQL, logging failures. The
+  unit waits for READY with a 1y timeout, so a node that can't boot (e.g.
+  SCYLLADB-5657) would hang the nemesis: don't block, await-open is the bound."
+  [test node]
+  (try (c/su (c/exec :systemctl :start :--no-block :scylla-server))
+       (sc/close! (sc/await-open test node))
+       (catch Exception e
+         (warn e node "start failed"))))
+
 (defn- heal-all!
   "Heals the network and SIGCONTs scylla on every node except `except` (resume
   is a no-op where it is not paused), starts scylla on members except `except`
@@ -293,15 +315,17 @@
   (net/heal! (:net test) test)
   (c/on-nodes test (remove #{except} (:nodes test))
               (fn [test node] (db/resume! db test node)))
-  (c/on-nodes test (remove #{except} (members state test))
-              (fn [test node]
-                (when-not (active?)
-                  ; Bounded by await-open; a node that can't start (e.g.
-                  ; SCYLLADB-5657) stays down and the op runs anyway.
-                  (try (db/start! db test node)
-                       (sc/close! (sc/await-open test node))
-                       (catch Exception e
-                         (warn e node "start before topology op failed"))))))
+  (let [dead (->> (c/on-nodes test (remove #{except} (members state test))
+                              (fn [_ _] (active?)))
+                  (remove val)
+                  (map key))
+        ups  (map :node (normal-members state))
+        ; A timed-out decommission or remove counts as a member but may have
+        ; finished since, banning the node: ask another member first.
+        dead (filter #(let [via (rand-nth-empty (remove #{%} ups))]
+                        (or (nil? via) (listed? test via %)))
+                     dead)]
+    (c/on-nodes test dead (fn [test node] (start-and-await! test node))))
   (Thread/sleep heal-settle-ms))
 
 (defn- await-down!
@@ -322,16 +346,6 @@
                            (do (Thread/sleep 1000)
                                (recur (dec tries)))
                            e)))))
-       via))
-
-(defn- listed?
-  "Does via's `nodetool status` list node? True if nodetool fails."
-  [test via node]
-  (get (c/on-nodes test [via]
-                   (fn [test _]
-                     (try+ (boolean (some #(= node (:node %))
-                                          (sdb/nodetool-status test)))
-                           (catch Object _ true))))
        via))
 
 (defn- others-down
@@ -492,14 +506,7 @@
         :remove-node
         (let [target (:node (:node value))
               via    (:via value)
-              restart! #(c/on-nodes test [target]
-                                    (fn [test node]
-                                      ; Scylla may refuse to start, e.g.
-                                      ; SCYLLADB-5657: log it, don't crash.
-                                      (try (db/start! db test node)
-                                           (sc/close! (sc/await-open test node))
-                                           (catch Exception e
-                                             (warn e node "restart failed")))))]
+              restart! #(c/on-nodes test [target] start-and-await!)]
           (heal-all! test db this target)
           (if-not (:kill? value)
             (with-nodetool-errors (sdb/remove-node! test via (:node value)))
