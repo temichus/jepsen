@@ -7,6 +7,7 @@
   (let [s  (n/map->MembershipState {:free #{"n1"}})
         op {:f :add-node, :value "n1"}]
     (is (= #{} (:free (ms/resolve-op s nil [op {:value [:added "n1"]}]))))
+    (is (= #{} (:free (ms/resolve-op s nil [op {:value [:added "n1" :no-cql]}]))))
     (is (= #{"n1"} (:free (ms/resolve-op s nil [op {:value [:add-failed "n1"]}]))))))
 
 (deftest failed-decommission-resolves-without-freeing
@@ -27,13 +28,18 @@
       (is (nil? (ms/resolve-op s nil [op {:value [:removed "n2" ""]}]))))))
 
 (deftest remove-op-kills-a-live-member-when-none-is-down
-  (let [up    (fn [n] {:node n, :id (str n "-id"), :status :up})
+  (let [up    (fn [n] {:node n, :id (str n "-id"), :status :up, :state :normal})
         views {"n1" [(up "n1") (up "n2")], "n2" [(up "n1") (up "n2")]}
         s     (n/map->MembershipState {:free #{}, :node-views views})
         v     (:value (n/remove-op s))]
     (is (:kill? v))
     (is (= (str (:node (:node v)) "-id") (:id (:node v))))
     (is (not= (:via v) (:node (:node v))))
+    (testing "a joining node is never killed"
+      (is (nil? (n/remove-op (assoc s :node-views
+                                    {"n1" [(up "n1") (assoc (up "n2") :state :joining)]
+                                     "n2" [(up "n1") (assoc (up "n2") :state :joining)]
+                                     "n3" [(assoc (up "n3") :state :joining)]})))))
     (testing "a down node is removed as before"
       (let [v (:value (n/remove-op
                         (assoc-in s [:node-views "n1" 1 :status] :down)))]

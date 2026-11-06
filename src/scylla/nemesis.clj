@@ -195,11 +195,13 @@
                                         (not= via (:node node)))]
                          {:via via
                           :node (select-keys node [:node :id])}))
-                     ; Members which think they're up, as up-nodes, with ids.
+                     ; Members which think they're up and normal, with ids:
+                     ; killing a joiner makes it unstartable (see :add-node).
                      (let [up (for [[via node-view] (:node-views state)
                                     node            node-view
                                     :when (and (= via (:node node))
                                                (up? node)
+                                               (= :normal (:state node))
                                                (not (contains? (:free state)
                                                                via)))]
                                 (select-keys node [:node :id]))]
@@ -402,8 +404,10 @@
         ; A kill mid-join can get the join cancelled and the node banned:
         ; then wipe it and keep it free, so a later add-node retries it. A
         ; node the coordinator accepted is a member even with no CQL yet;
-        ; wiping it would leave a dead normal node nothing removes. Stop it
-        ; before reading the journal, so it can't be accepted after we look.
+        ; wiping it would leave a dead normal node nothing removes. Killing
+        ; it before it reaches NORMAL makes every later start fail ("no entry
+        ; for request id"), so leave an accepted one running. Otherwise stop
+        ; it and read the journal again: it may have been accepted meanwhile.
         (do (heal-all! test db nil)
             (try (c/on-nodes test [value]
                              (fn [test node]
@@ -414,21 +418,27 @@
                                (sc/close! (sc/await-open test node))))
                  [:added value]
                  (catch Exception e
-                   (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
-                   (if (let [j (get (c/on-nodes test [value]
-                                                (fn [_ _] (sdb/journal-since-mark)))
-                                    value)]
-                         (and (re-find #"coordinator accepted request to join|join: success" j)
-                              (not (re-find sdb/join-refused j))))
-                     (do (warn e value "no CQL, but joined; restarting it")
-                         (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
-                         [:added value :no-cql])
-                     (do (warn e value "join not accepted; wiping it")
-                         (c/on-nodes test [value]
-                                     (fn [test node]
-                                       (sdb/wipe! db test node)
-                                       (sdb/disable!)))
-                         [:add-failed value])))))
+                   (let [joined? #(let [j (get (c/on-nodes test [value]
+                                                           (fn [_ _] (sdb/journal-since-mark)))
+                                               value)]
+                                    (and (re-find #"coordinator accepted request to join|join: success" j)
+                                         (not (re-find sdb/join-refused j))))]
+                     (if (joined?)
+                       (do (warn e value "no CQL, but joined; leaving it running")
+                           [:added value :no-cql])
+                       (do (c/on-nodes test [value] (fn [test node] (db/kill! db test node)))
+                           (if (joined?)
+                             (do (warn e value "no CQL, joined as we killed it; restarting it")
+                                 (try (c/on-nodes test [value] (fn [test node] (db/start! db test node)))
+                                      (catch Exception e
+                                        (warn e value "restart failed")))
+                                 [:added value :no-cql])
+                             (do (warn e value "join not accepted; wiping it")
+                                 (c/on-nodes test [value]
+                                             (fn [test node]
+                                               (sdb/wipe! db test node)
+                                               (sdb/disable!)))
+                                 [:add-failed value]))))))))
 
         ; A :kill? target is live: kill it and let `via` see it down. If the
         ; remove then fails or times out, start it again: a dead member
