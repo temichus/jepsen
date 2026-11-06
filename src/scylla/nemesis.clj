@@ -311,17 +311,26 @@
        via))
 
 (defn- others-down
-  "Nodes other than node that via's `nodetool status` doesn't show up; via
-  itself if nodetool fails."
+  "Members other than node that via's `nodetool status` doesn't show up, or
+  whose scylla unit isn't active: gossip takes ~20 s to see a kill, and
+  meanwhile we'd kill a third voter. Via itself if nodetool fails."
   [test via node]
-  (->> (get (c/on-nodes test [via]
-                        (fn [test _]
-                          (try+ (sdb/nodetool-status test)
-                                (catch Object _
-                                  [{:node via, :status :failed}]))))
-            via)
-       (remove #(or (= node (:node %)) (= :up (:status %))))
-       (map :node)))
+  (let [others (->> (get (c/on-nodes test [via]
+                                     (fn [test _]
+                                       (try+ (sdb/nodetool-status test)
+                                             (catch Object _
+                                               [{:node via, :status :failed}]))))
+                         via)
+                    (remove #(= node (:node %))))
+        dead   (->> (c/on-nodes test (map :node others)
+                                (fn [_ _]
+                                  (try+ (c/exec :systemctl :is-active :scylla-server)
+                                        true
+                                        (catch Object _ false))))
+                    (remove val)
+                    (map key))]
+    (distinct (concat (->> others (remove #(= :up (:status %))) (map :node))
+                      dead))))
 
 (defn removed?
   "Did v, a remove-node! or decommission-node! result, report success?"
