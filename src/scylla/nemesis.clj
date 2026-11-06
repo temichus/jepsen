@@ -319,7 +319,7 @@
   a member but may have finished since, banning the node: start only those
   every live normal member other than `except` that answers lists, not
   excluded. `status` maps a via to its `nodetool status`, nil if that fails;
-  if none answers, start nothing."
+  nil if none answers."
   [state test except dead status]
   (let [answers (->> (normal-members state)
                      (map :node)
@@ -328,6 +328,14 @@
                      (keep status))]
     (when (seq answers)
       (filter (fn [n] (every? #(listed-in % n) answers)) dead))))
+
+(defn blocking-down
+  "Which `dead` members block a topology op: those `dead-to-start` allows, so
+  a ghost (removed in Scylla, a member here) doesn't block every later op;
+  all of them if no member answers, e.g. after a kill :all."
+  [state test except dead status]
+  (when (seq dead)
+    (or (dead-to-start state test except dead status) dead)))
 
 (defn- start-and-await!
   "Starts scylla on the current node, unless disable!d, then polls its unit
@@ -366,8 +374,9 @@
   whose unit isn't active (the kill nemesis leaves them dead) and that
   `dead-to-start` allows, then waits heal-settle-ms. The partition package's
   later :stop-partition is a second, harmless heal. Returns the members
-  other than `except` still down: after a kill :all, or with the only live
-  member still booting, nobody answers `dead-to-start` and none is started."
+  other than `except` still down that `blocking-down` keeps: after a kill
+  :all, or with the only live member still booting, nobody answers
+  `dead-to-start` and none is started."
   [test db state except]
   (info "Healing network and resuming nodes before a topology op")
   (net/heal! (:net test) test)
@@ -378,7 +387,8 @@
                                   #(status-via test %))
               start-and-await!)
   (Thread/sleep heal-settle-ms)
-  (down-members test state except))
+  (blocking-down state test except (down-members test state except)
+                 #(status-via test %)))
 
 (defn- await-down!
   "Polls `nodetool status` on via, for up to ~60 s, while it shows node up or

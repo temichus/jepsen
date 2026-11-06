@@ -105,3 +105,22 @@
                         test nil ["n3"]
                         (fn [via] (swap! asked conj via) (when (= "n1" via) n3)))))
         (is (= ["n1"] @asked))))))
+
+(deftest blocking-down-skips-ghosts
+  (let [up   (fn [n] {:node n, :id n, :status :up, :state :normal})
+        s    (n/map->MembershipState
+               {:free #{}, :node-views (into {} (for [n ["n1" "n2" "n3"]]
+                                                  [n [(up n)]]))})
+        test {:nodes ["n1" "n2" "n3"]}]
+    (testing "listed: blocks"
+      (is (= ["n3"] (n/blocking-down s test nil ["n3"]
+                                     (constantly [{:node "n3", :status :down}])))))
+    (testing "a ghost, unlisted or excluded, doesn't block"
+      (doseq [e [[] [{:node "n3", :status :excluded}]]]
+        (is (empty? (n/blocking-down s test nil ["n3"] (constantly e))) (pr-str e))))
+    (testing "nobody answers: all block"
+      (is (= ["n3"] (n/blocking-down s test nil ["n3"] (constantly nil))))
+      (is (= ["n2" "n3"] (n/blocking-down s test "n1" ["n2" "n3"]
+                                          (constantly [])))))
+    (testing "none down: nobody asked"
+      (is (nil? (n/blocking-down s test nil [] #(throw (ex-info "asked" {:via %}))))))))
