@@ -440,7 +440,9 @@
   A timed-out one may still finish, but wiping the node meanwhile leaves a
   dead normal node every later join waits for. invoke! checks another
   member's status once at the timeout.
-  ponytail: one that finishes after that check is still counted a member."
+  One that finishes after that check is counted a member until it is picked
+  again: that decommission fails with DECOMMISSIONED state and counts as
+  done, so the node is wiped and re-added."
   [v]
   (and (sequential? v)
        (or (= :timeout (last v))
@@ -619,9 +621,15 @@
           [:not-decommissioned value (vec down)]
           (let [r   (with-nodetool-errors (sdb/decommission-node! test value))
                 via (rand-nth-empty (remove #{value} (map :node (normal-members this))))]
-            (if (and (= :timeout (get r 2)) via (false? (listed? test via value)))
-              (assoc r 2 "timed out, but gone from status")
-              r)))
+            (cond (and (= :timeout (get r 2)) via (false? (listed? test via value)))
+                  (assoc r 2 "timed out, but gone from status")
+
+                  ; An earlier timed-out decommission finished after all.
+                  (and (= :nodetool-failed (first r))
+                       (re-find #"Node in DECOMMISSIONED state" (str (second r))))
+                  [:decommissioned value "already decommissioned"]
+
+                  :else r)))
 
         :wipe-node
         (do (c/on-nodes test [value]
