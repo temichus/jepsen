@@ -261,6 +261,7 @@
              #"Connection refused"         :conn-refused
              #"alive and owns this ID"     :node-considered-alive
              #"removenode is in progress"  :remove-in-progress
+             #"Concurrent request for removal" :remove-in-progress
              #"Host ID not found"          :host-id-not-found
              #"failed to repair \d+ sub ranges" [:failed-to-repair-sub-ranges
                                                  (:out e#)]
@@ -314,6 +315,16 @@
   [test via node]
   (listed-in (status-via test via) node))
 
+(defn- answers
+  "The `nodetool status` of every live normal member other than `except`
+  and `dead` that answers."
+  [state test except dead status]
+  (->> (normal-members state)
+       (map :node)
+       (filter (set (members state test)))
+       (remove (conj (set dead) except))
+       (keep status)))
+
 (defn dead-to-start
   "Which `dead` members to start. A timed-out decommission or remove counts as
   a member but may have finished since, banning the node: start only those
@@ -321,23 +332,24 @@
   excluded. `status` maps a via to its `nodetool status`, nil if that fails;
   nil if none answers."
   [state test except dead status]
-  (let [answers (->> (normal-members state)
-                     (map :node)
-                     (filter (set (members state test)))
-                     (remove (conj (set dead) except))
-                     (keep status))]
+  (let [answers (answers state test except dead status)]
     (when (seq answers)
       (filter (fn [n] (every? #(listed-in % n) answers)) dead))))
 
 (defn blocking-down
-  "Which `dead` members block a topology op: those `dead-to-start` allows;
-  all of them if no member answers, e.g. after a kill :all. A dead node that
-  any answering member doesn't list, or lists excluded, is a ghost (removed
-  in Scylla, a member here) and doesn't block: a banned node never starts
-  again, so it would block every later op."
+  "Which `dead` members block a topology op: those every answering member
+  lists, excluded too (a remove placed but not done: Scylla cancels joins and
+  decommissions for it); all of them if no member answers, e.g. after a kill
+  :all. A dead node that any answering member doesn't list is a ghost
+  (removed in Scylla, a member here) and doesn't block: a banned node never
+  starts again, so it would block every later op."
   [state test except dead status]
   (when (seq dead)
-    (or (dead-to-start state test except dead status) dead)))
+    (let [answers (answers state test except dead status)]
+      (if (seq answers)
+        (filter (fn [n] (every? (fn [st] (some #(= n (:node %)) st)) answers))
+                dead)
+        dead))))
 
 (defn- start-and-await!
   "Starts scylla on the current node, unless disable!d, then polls its unit
@@ -564,14 +576,19 @@
                                [:add-failed value]))))))))
 
         ; A :kill? target is live: kill it and let `via` see it down. If the
-        ; remove then fails or times out, start it again: a dead member
-        ; cancels every later topology op. A timed-out remove whose target
-        ; is already gone from via's status counts as removed, and so does
-        ; one whose target shows X (excluded): it still runs, and Scylla
-        ; bans that target on start, so we disable! it to be wiped and
-        ; re-added like any removed node.
-        ; ponytail: one that times out and finishes later bans the restarted
-        ; node, still counted a member, as `not-removed?` notes.
+        ; remove fails before its request is placed, start it again: a dead
+        ; member cancels every later join and decommission. Here a timed-out
+        ; remove whose target is already gone from via's status counts as
+        ; removed. X (excluded) only means the request is placed: it may
+        ; hang (SCYLLADB-4753) or be cancelled, and Scylla cancels joins and
+        ; decommissions for the dead node meanwhile, so it stays a member,
+        ; is not started (`dead-to-start`), blocks other topology ops
+        ; (`blocking-down`), and a later remove-op retries it.
+        ; ponytail: one that times out and finishes later leaves a member
+        ; gone from every status that is never re-added, nor counted by the
+        ; `max-removed-nodes` gate or `others-down`: the test runs a node
+        ; short, and a later kill-and-remove can leave too few for quorum.
+        ; Recognising it needs the id `via` had, not a view's.
         :remove-node
         (let [target (:node (:node value))
               via    (:via value)
@@ -596,11 +613,8 @@
                                     test via
                                     (merge (:node value) (select-keys e [:id]))))]
                           (if (= :timeout (get r 2))
-                            (case (:status (await-down! test via target))
-                              nil       (assoc r 2 "timed out, but gone from status")
-                              :excluded (do (c/on-nodes test [target]
-                                                        (fn [_ _] (sdb/disable!)))
-                                            (assoc r 2 "timed out, excluded"))
+                            (if (nil? (:status (await-down! test via target)))
+                              (assoc r 2 "timed out, but gone from status")
                               r)
                             r))
                         (catch Throwable t

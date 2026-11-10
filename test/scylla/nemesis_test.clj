@@ -116,9 +116,11 @@
     (testing "listed: blocks"
       (is (= ["n3"] (n/blocking-down s test nil ["n3"]
                                      (constantly [{:node "n3", :status :down}])))))
-    (testing "a ghost, unlisted or excluded, doesn't block"
-      (doseq [e [[] [{:node "n3", :status :excluded}]]]
-        (is (empty? (n/blocking-down s test nil ["n3"] (constantly e))) (pr-str e)))
+    (testing "excluded, a remove placed but not done: blocks"
+      (is (= ["n3"] (n/blocking-down s test nil ["n3"]
+                                     (constantly [{:node "n3", :status :excluded}])))))
+    (testing "a ghost, unlisted, doesn't block"
+      (is (empty? (n/blocking-down s test nil ["n3"] (constantly []))))
       (is (= () (n/blocking-down s test nil ["n3"]
                                  {"n1" [{:node "n3", :status :down}], "n2" []}))
           "members disagree"))
