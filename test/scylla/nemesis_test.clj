@@ -130,3 +130,12 @@
                                           (constantly [])))))
     (testing "none down: nobody asked"
       (is (nil? (n/blocking-down s test nil [] #(throw (ex-info "asked" {:via %}))))))))
+
+(deftest restart-result-test
+  (let [line "Nov 15 10:00:01 n3 scylla[42]: Startup failed: std::runtime_error (cannot replay the raft log: committed entries are missing)"]
+    (is (= [:restarted "n1"] (n/restart-result "n1" "active" nil)))
+    (is (= [:skipped "n1" :disabled] (n/restart-result "n1" :disabled nil)))
+    (is (= [:start-failed "n3" line]
+           (n/restart-result "n3" "failed" (str "Nov 15 10:00:00 n3 scylla[42]: init\n" line "\nNov 15 shutdown\n"))))
+    (is (= [:start-failed "n3" "failed"] (n/restart-result "n3" "failed" "")))
+    (is (= [:not-up "n3" "deactivating"] (n/restart-result "n3" "deactivating" "")))))

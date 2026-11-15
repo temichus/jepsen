@@ -351,6 +351,18 @@
                 dead)
         dead))))
 
+(defn- await-unit!
+  "Polls the scylla unit for up to ~120 s until active (Type=notify: READY
+  comes once CQL serves) or failed; returns its last state. Sleeps first:
+  until a queued job runs, the unit still shows its old state."
+  []
+  (loop [tries 60]
+    (Thread/sleep 2000)
+    (let [s (unit-state)]
+      (if (or (#{"active" "failed"} s) (= 1 tries))
+        s
+        (recur (dec tries))))))
+
 (defn- start-and-await!
   "Starts scylla on the current node, unless disable!d, then polls its unit
   for up to ~120 s until active (Type=notify: READY comes once CQL serves) or
@@ -361,18 +373,65 @@
   (try (if-not (cu/exists? sdb/scylla-bin)
          (info node "not starting ScyllaDB: disabled")
          (do (c/su (c/exec :systemctl :start :--no-block :scylla-server))
-             ; Sleep first: until the queued job runs, a crash-looped unit
-             ; still reads failed.
-             (let [s (loop [tries 60]
-                       (Thread/sleep 2000)
-                       (let [s (unit-state)]
-                         (if (or (#{"active" "failed"} s) (= 1 tries))
-                           s
-                           (recur (dec tries)))))]
+             (let [s (await-unit!)]
                (when-not (= "active" s)
                  (warn node "scylla unit" s "after start")))))
        (catch Exception e
          (warn e node "start failed"))))
+
+(defn restart-result
+  "A :restart op's result for node, from its unit state after the restart (or
+  :disabled / :down if it was skipped) and its journal since."
+  [node state journal]
+  (let [line (re-find #".*Startup failed.*" (str journal))]
+    (cond (keyword? state)   [:skipped node state]
+          (= "active" state) [:restarted node]
+          (= "failed" state) [:start-failed node (or line state)]
+          :else              (cond-> [:not-up node state] line (conj line)))))
+
+(defn- restart!
+  "Cleanly restarts scylla on the current node (systemctl: SIGTERM, never
+  SIGKILL) and waits ~120 s for it, unless the membership nemesis disabled
+  it or its unit isn't active (killed, or a failed start: left down, for
+  the kill and membership nemeses to handle). A paused node is resumed
+  first: a stopped process can't act on SIGTERM. --no-block: a hung
+  shutdown (TimeoutStopSec is 15 min) shows as :not-up, not a stuck
+  nemesis. A failed node stays down."
+  [db test node]
+  (cond (not (cu/exists? sdb/scylla-bin)) (restart-result node :disabled nil)
+        (not (active?))                   (restart-result node :down nil)
+        :else
+        (do (info node "restarting ScyllaDB")
+            (db/resume! db test node)
+            (sdb/mark-journal!)
+            (c/su (c/exec :systemctl :restart :--no-block :scylla-server))
+            (let [s (await-unit!)]
+              (restart-result node s (when-not (= "active" s)
+                                       (sdb/journal-since-mark)))))))
+
+(defn restart-package
+  "Clean restarts of :one, a minority, a majority or :all nodes, in parallel,
+  every :interval seconds. Each op's value is a restart-result per node."
+  [opts]
+  (when ((:faults opts) :restart)
+    {:generator (gen/stagger (:interval opts nc/default-interval)
+                             (fn [_ _] {:type  :info
+                                        :f     :restart
+                                        :value (rand-nth [:one :minority :majority :all])}))
+     :nemesis   (reify
+                  n/Reflection
+                  (fs [_] #{:restart})
+                  n/Nemesis
+                  (setup! [this _] this)
+                  (invoke! [_ test op]
+                    (let [db (:db opts)]
+                      (->> (c/on-nodes test (nc/db-nodes test db (:value op))
+                                       (partial restart! db))
+                           (sort-by key)
+                           (mapv val)
+                           (assoc op :value))))
+                  (teardown! [_ _]))
+     :perf      #{{:name "restart", :fs #{:restart}, :color "#B0E9A0"}}}))
 
 (defn- down-members
   "Members other than except whose scylla unit isn't active."
@@ -746,7 +805,8 @@
   [opts]
   (let [membership (membership-package opts)
         ; Membership last: its final re-adds must follow the others' heals.
-        pkg (->> (concat (nc/nemesis-packages opts) [membership])
+        pkg (->> (concat (nc/nemesis-packages opts)
+                         [(restart-package opts) membership])
                  (remove nil?)
                  nc/compose-packages
                  ;periodically-recover
