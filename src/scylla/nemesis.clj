@@ -353,16 +353,18 @@
         dead))))
 
 (defn- await-unit!
-  "Polls the scylla unit for up to ~120 s until active (Type=notify: READY
-  comes once CQL serves) or failed; returns its last state. Sleeps first:
-  until a queued job runs, the unit still shows its old state."
-  []
-  (loop [tries 60]
+  "Polls the scylla unit for up to ~2 s * tries (default ~120 s) until active
+  (Type=notify: READY comes once CQL serves) or failed; returns its last
+  state. Sleeps first: until a queued job runs, the unit still shows its old
+  state."
+  ([] (await-unit! 60))
+  ([tries]
+  (loop [tries tries]
     (Thread/sleep 2000)
     (let [s (unit-state)]
       (if (or (#{"active" "failed"} s) (= 1 tries))
         s
-        (recur (dec tries))))))
+        (recur (dec tries)))))))
 
 (defn- start-and-await!
   "Starts scylla on the current node, unless disable!d, then polls its unit
@@ -403,7 +405,8 @@
 
 (defn- restart!
   "Cleanly restarts scylla on the current node (systemctl: SIGTERM, never
-  SIGKILL) and waits ~120 s for it, unless the membership nemesis disabled
+  SIGKILL) and waits ~330 s for it (this build's shutdown can wait 300 s on
+  a migration RPC, fixed upstream in 09bc661bd0), unless the membership nemesis disabled
   it or its unit isn't active (killed, or a failed start: left down, for
   the kill and membership nemeses to handle). A paused node is resumed
   first: a stopped process can't act on SIGTERM. --no-block: a hung
@@ -417,7 +420,7 @@
             (db/resume! db test node)
             (sdb/mark-journal!)
             (c/su (c/exec :systemctl :restart :--no-block :scylla-server))
-            (let [s (await-unit!)]
+            (let [s (await-unit! 165)]
               (restart-result node s (sdb/journal-since-mark))))))
 
 (defn restart-package
