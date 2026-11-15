@@ -138,4 +138,11 @@
     (is (= [:start-failed "n3" line]
            (n/restart-result "n3" "failed" (str "Nov 15 10:00:00 n3 scylla[42]: init\n" line "\nNov 15 shutdown\n"))))
     (is (= [:start-failed "n3" "failed"] (n/restart-result "n3" "failed" "")))
-    (is (= [:not-up "n3" "deactivating"] (n/restart-result "n3" "deactivating" "")))))
+    (is (= [:not-up "n3" "deactivating"] (n/restart-result "n3" "deactivating" "")))
+    (testing "a crash on shutdown that systemd recovered from is not clean"
+      (let [abort "Nov 15 10:00:01 n2 scylla[7]: Aborting on shard 0, in scheduling group main."]
+        (is (= [:crashed "n2" abort]
+               (n/restart-result "n2" "active" (str "Nov 15 shutting down\n" abort "\nNov 15 serving\n"))))))
+    (testing "a node Scylla refuses is skipped, not failed"
+      (is (= [:skipped "n4" :refused]
+             (n/restart-result "n4" "failed" (str "Nov 15 n4 scylla[9]: This node was decommissioned\n" line)))))))

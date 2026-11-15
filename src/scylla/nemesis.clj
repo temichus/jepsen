@@ -381,13 +381,17 @@
 
 (defn restart-result
   "A :restart op's result for node, from its unit state after the restart (or
-  :disabled / :down if it was skipped) and its journal since."
+  :disabled / :down if it was skipped) and its journal since. A node Scylla
+  refuses (decommissioned, banned) is skipped; a crash on shutdown that
+  systemd restarted from is :crashed, not :restarted."
   [node state journal]
-  (let [line (re-find #".*Startup failed.*" (str journal))]
-    (cond (keyword? state)   [:skipped node state]
-          (= "active" state) [:restarted node]
-          (= "failed" state) [:start-failed node (or line state)]
-          :else              (cond-> [:not-up node state] line (conj line)))))
+  (let [j     (str journal)
+        crash (re-find #".*(?:Aborting on shard|Assertion .* failed|Segmentation fault|Startup failed).*" j)]
+    (cond (keyword? state)           [:skipped node state]
+          (re-find sdb/join-refused j) [:skipped node :refused]
+          (= "failed" state)         [:start-failed node (or crash state)]
+          (= "active" state)         (if crash [:crashed node crash] [:restarted node])
+          :else                      (cond-> [:not-up node state] crash (conj crash)))))
 
 (defn- restart!
   "Cleanly restarts scylla on the current node (systemctl: SIGTERM, never
@@ -406,8 +410,7 @@
             (sdb/mark-journal!)
             (c/su (c/exec :systemctl :restart :--no-block :scylla-server))
             (let [s (await-unit!)]
-              (restart-result node s (when-not (= "active" s)
-                                       (sdb/journal-since-mark)))))))
+              (restart-result node s (sdb/journal-since-mark))))))
 
 (defn restart-package
   "Clean restarts of :one, a minority, a majority or :all nodes, in parallel,
