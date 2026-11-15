@@ -150,3 +150,12 @@
       (let [dump "Nov 15 n1 systemd[1]: scylla-server.service: Main process exited, code=dumped, status=6/ABRT"]
         (is (= [:crashed "n1" dump]
                (n/restart-result "n1" "active" (str "Nov 15 n1 scylla[3]: n5 is banned from the cluster\n" dump))))))))
+
+(deftest next-rf-steps-by-one-within-bounds
+  (let [steps (fn [rf up] (set (repeatedly 100 #(n/next-rf rf up))))]
+    (is (= #{2 4} (steps 3 5)) "lowers as well as raises")
+    (is (= #{3} (steps 2 5)))
+    (is (= #{3} (steps 4 5)) "never above 4")
+    (is (= #{2} (steps 3 4)) "a decommission must still leave RF nodes")
+    (is (= #{3} (steps 4 3)) "lowers by one even far above the bound")
+    (is (= #{nil} (steps 2 3)))))

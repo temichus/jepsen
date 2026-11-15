@@ -6,7 +6,8 @@
             [clojure.string :as str]
             [scylla [client :as client]
                     [db :as sdb]]
-            [scylla.sc [client :as sc]]
+            [scylla.sc [client :as sc]
+                       [db :as sc-db]]
             [slingshot.slingshot :refer [try+ throw+]]
             [jepsen [control :as c]
                     [db :as db]
@@ -442,6 +443,89 @@
                   (teardown! [_ _]))
      :perf      #{{:name "restart", :fs #{:restart}, :color "#B0E9A0"}}}))
 
+;; Replication factor changes
+
+(def rf-timeout-ms
+  "CQL timeout of an ALTER KEYSPACE. It returns once the topology coordinator
+  has finished the tablet rebuilds, and any other topology op under way
+  (query_processor::announce_schema_statement waits for
+  wait_for_topology_not_busy)."
+  (* 10 60 1000))
+
+(defn next-rf
+  "The RF to step to from rf, or nil: one lower, not below 2, or one higher,
+  not above 4 nor above up-normal - 1, so that a decommission still leaves
+  RF nodes. Lowering ignores up-normal: after nodes went down rf may sit above
+  the bound. From 3 both ways are equally likely."
+  [rf up-normal]
+  (rand-nth-empty (concat (when (> rf 2) [(dec rf)])
+                          (when (< rf (min 4 (dec up-normal))) [(inc rf)]))))
+
+(defn- keyspace-rf
+  "[dc rf] of the workloads' keyspace, from the schema: a timed-out ALTER may
+  have applied. One DC."
+  [session]
+  (let [m (->> (sc/execute session (str "SELECT replication FROM system_schema.keyspaces"
+                                        " WHERE keyspace_name = '" sc-db/keyspace "'"))
+               first :replication (into {}))
+        [dc rf] (first (dissoc m "class"))]
+    [dc (Long/parseLong rf)]))
+
+(defn- alter-rf!
+  "ALTER KEYSPACE to rf in dc, sent once. :ok, :timeout, or the error message."
+  [session dc rf]
+  (try (sc/execute session
+                   (str "ALTER KEYSPACE " sc-db/keyspace " WITH replication = "
+                        "{'class': 'NetworkTopologyStrategy', '" dc "': " rf "}")
+                   {:read-timeout rf-timeout-ms})
+       :ok
+       (catch Exception e
+         (let [e (if (instance? clojure.lang.ExceptionInfo e) (or (ex-cause e) e) e)]
+           (if (instance? com.datastax.driver.core.exceptions.OperationTimedOutException e)
+             :timeout
+             (.getMessage e))))))
+
+(defn- change-rf!
+  "Steps the keyspace's RF via a node whose nodetool status answers, to the
+  op's value (the final generator's 3) or else to next-rf of its up normal
+  nodes."
+  [test op]
+  (if-let [[node status] (some #(some->> (status-via test %) (vector %))
+                               (shuffle (:nodes test)))]
+    (let [up-normal (count (filter #(= [:up :normal] [(:status %) (:state %)]) status))
+          conn      (sc/open test node)]
+      (try (let [[dc rf] (keyspace-rf (:session conn))
+                 to      (or (:value op) (next-rf rf up-normal))]
+             (if (or (nil? to) (= to rf))
+               {:node node, :from rf, :up-normal up-normal, :result :unchanged}
+               (let [t0 (System/nanoTime)
+                     r  (alter-rf! (:session conn) dc to)]
+                 {:node node, :from rf, :rf to, :up-normal up-normal, :result r
+                  :secs (/ (Math/round (/ (- (System/nanoTime) t0) 1e7)) 100.0)})))
+           (finally (sc/close! conn))))
+    {:result :no-node-answers}))
+
+(defn rf-package
+  "ALTER KEYSPACE replication factor changes between 2 and 4, one step every
+  :interval seconds; the final generator returns RF to 3."
+  [opts]
+  (when ((:faults opts) :rf)
+    {:generator       (gen/stagger (:interval opts nc/default-interval)
+                                   (fn [_ _] {:type :info, :f :rf}))
+     :final-generator (gen/once {:type :info, :f :rf, :value 3})
+     :nemesis         (reify
+                        n/Reflection
+                        (fs [_] #{:rf})
+                        n/Nemesis
+                        (setup! [this _] this)
+                        (invoke! [_ test op]
+                          ; Neither a dead node nor a failed ALTER may crash the test.
+                          (assoc op :value (try (change-rf! test op)
+                                                (catch Exception e
+                                                  {:result (str e)}))))
+                        (teardown! [_ _]))
+     :perf            #{{:name "rf", :fs #{:rf}, :color "#E9C3A0"}}}))
+
 (defn- down-members
   "Members other than except whose scylla unit isn't active."
   [test state except]
@@ -813,9 +897,10 @@
                 {:partition {:targets [:majorities-ring ...]}}"
   [opts]
   (let [membership (membership-package opts)
-        ; Membership last: its final re-adds must follow the others' heals.
+        ; Membership after the others: its final re-adds must follow their
+        ; heals. RF last, back to 3 on the healed cluster.
         pkg (->> (concat (nc/nemesis-packages opts)
-                         [(restart-package opts) membership])
+                         [(restart-package opts) membership (rf-package opts)])
                  (remove nil?)
                  nc/compose-packages
                  ;periodically-recover
