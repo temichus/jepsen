@@ -386,12 +386,18 @@
   systemd restarted from is :crashed, not :restarted."
   [node state journal]
   (let [j     (str journal)
-        crash (re-find #".*(?:Aborting on shard|Assertion .* failed|Segmentation fault|Startup failed).*" j)]
+        ; code=dumped: systemd's line for a crash that printed nothing.
+        crash (re-find #".*(?:Aborting on shard|Assertion.*failed|Segmentation fault|code=dumped).*" j)
+        start (re-find #".*Startup failed.*" j)]
+    ; A crash first: the coordinator's journal can mention a banned peer.
+    ; Refused only explains a failed start.
     (cond (keyword? state)           [:skipped node state]
-          (re-find sdb/join-refused j) [:skipped node :refused]
-          (= "failed" state)         [:start-failed node (or crash state)]
-          (= "active" state)         (if crash [:crashed node crash] [:restarted node])
-          :else                      (cond-> [:not-up node state] crash (conj crash)))))
+          crash                      [:crashed node crash]
+          (= "failed" state)         (if (re-find sdb/join-refused j)
+                                       [:skipped node :refused]
+                                       [:start-failed node (or start state)])
+          (= "active" state)         [:restarted node]
+          :else                      (cond-> [:not-up node state] start (conj start)))))
 
 (defn- restart!
   "Cleanly restarts scylla on the current node (systemctl: SIGTERM, never

@@ -145,4 +145,8 @@
                (n/restart-result "n2" "active" (str "Nov 15 shutting down\n" abort "\nNov 15 serving\n"))))))
     (testing "a node Scylla refuses is skipped, not failed"
       (is (= [:skipped "n4" :refused]
-             (n/restart-result "n4" "failed" (str "Nov 15 n4 scylla[9]: This node was decommissioned\n" line)))))))
+             (n/restart-result "n4" "failed" (str "Nov 15 n4 scylla[9]: This node was decommissioned\n" line)))))
+    (testing "a crash wins over a banned peer in the coordinator's journal"
+      (let [dump "Nov 15 n1 systemd[1]: scylla-server.service: Main process exited, code=dumped, status=6/ABRT"]
+        (is (= [:crashed "n1" dump]
+               (n/restart-result "n1" "active" (str "Nov 15 n1 scylla[3]: n5 is banned from the cluster\n" dump))))))))
