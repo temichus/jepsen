@@ -145,7 +145,16 @@
                (n/restart-result "n2" "active" (str "Nov 15 shutting down\n" abort "\nNov 15 serving\n"))))))
     (testing "a node Scylla refuses is skipped, not failed"
       (is (= [:skipped "n4" :refused]
-             (n/restart-result "n4" "failed" (str "Nov 15 n4 scylla[9]: This node was decommissioned\n" line)))))
+             (n/restart-result "n4" "failed" "Nov 15 n4 scylla[9]: Startup failed: std::runtime_error (This node was decommissioned and will not rejoin the ring)"))))
+    (testing "a refusal elsewhere in the journal doesn't hide another startup failure"
+      (is (= [:start-failed "n4" line]
+             (n/restart-result "n4" "failed" (str "Nov 15 n4 scylla[9]: This node was decommissioned\n" line))))
+      (is (= [:start-failed "n1" line]
+             (n/restart-result "n1" "failed" (str "Nov 15 n1 scylla[3]: n5 is banned from the cluster\n" line)))))
+    (testing "systemd's kill lines for a silent crash"
+      (doseq [sig ["6/ABRT" "11/SEGV"]]
+        (let [l (str "Nov 15 n1 systemd[1]: scylla-server.service: Main process exited, code=killed, status=" sig)]
+          (is (= [:crashed "n1" l] (n/restart-result "n1" "active" l))))))
     (testing "a crash wins over a banned peer in the coordinator's journal"
       (let [dump "Nov 15 n1 systemd[1]: scylla-server.service: Main process exited, code=dumped, status=6/ABRT"]
         (is (= [:crashed "n1" dump]
@@ -156,6 +165,8 @@
     (is (= #{2 4} (steps 3 5)) "lowers as well as raises")
     (is (= #{3} (steps 2 5)))
     (is (= #{3} (steps 4 5)) "never above 4")
-    (is (= #{2} (steps 3 4)) "a decommission must still leave RF nodes")
-    (is (= #{3} (steps 4 3)) "lowers by one even far above the bound")
-    (is (= #{nil} (steps 2 3)))))
+    (is (= #{2 4} (steps 3 4)))
+    (is (= #{2} (steps 3 3)) "never above the up normal nodes")
+    (is (= #{3} (steps 2 3)) "a 3-node cluster still goes 2 <-> 3")
+    (is (= #{3} (steps 4 2)) "lowers by one even far above the bound")
+    (is (= #{nil} (steps 2 2)))))

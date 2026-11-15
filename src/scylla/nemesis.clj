@@ -387,14 +387,15 @@
   systemd restarted from is :crashed, not :restarted."
   [node state journal]
   (let [j     (str journal)
-        ; code=dumped: systemd's line for a crash that printed nothing.
-        crash (re-find #".*(?:Aborting on shard|Assertion.*failed|Segmentation fault|code=dumped).*" j)
+        ; systemd's lines for a crash that printed nothing.
+        crash (re-find #".*(?:Aborting on shard|Assertion.*failed|Segmentation fault|code=dumped|code=killed, status=(?:6/ABRT|11/SEGV)).*" j)
         start (re-find #".*Startup failed.*" j)]
-    ; A crash first: the coordinator's journal can mention a banned peer.
-    ; Refused only explains a failed start.
+    ; A crash first. Refused only if the startup failure says so: the
+    ; coordinator's journal can mention a banned peer before failing for
+    ; another reason.
     (cond (keyword? state)           [:skipped node state]
           crash                      [:crashed node crash]
-          (= "failed" state)         (if (re-find sdb/join-refused j)
+          (= "failed" state)         (if (and start (re-find sdb/join-refused start))
                                        [:skipped node :refused]
                                        [:start-failed node (or start state)])
           (= "active" state)         [:restarted node]
@@ -446,20 +447,20 @@
 ;; Replication factor changes
 
 (def rf-timeout-ms
-  "CQL timeout of an ALTER KEYSPACE. It returns once the topology coordinator
-  has finished the tablet rebuilds, and any other topology op under way
-  (query_processor::announce_schema_statement waits for
-  wait_for_topology_not_busy)."
-  (* 10 60 1000))
+  "CQL timeout of an ALTER KEYSPACE, as for the membership ops. It returns
+  once the topology coordinator has finished the tablet rebuilds, and any
+  other topology op under way (query_processor::announce_schema_statement
+  waits for wait_for_topology_not_busy). One that applies later shows in the
+  next op's schema RF."
+  (* 330 1000))
 
 (defn next-rf
   "The RF to step to from rf, or nil: one lower, not below 2, or one higher,
-  not above 4 nor above up-normal - 1, so that a decommission still leaves
-  RF nodes. Lowering ignores up-normal: after nodes went down rf may sit above
+  not above 4 nor above up-normal. Lowering ignores up-normal: after nodes went down rf may sit above
   the bound. From 3 both ways are equally likely."
   [rf up-normal]
   (rand-nth-empty (concat (when (> rf 2) [(dec rf)])
-                          (when (< rf (min 4 (dec up-normal))) [(inc rf)]))))
+                          (when (< rf (min 4 up-normal)) [(inc rf)]))))
 
 (defn- keyspace-rf
   "[dc rf] of the workloads' keyspace, from the schema: a timed-out ALTER may
@@ -470,6 +471,16 @@
                first :replication (into {}))
         [dc rf] (first (dissoc m "class"))]
     [dc (Long/parseLong rf)]))
+
+(defn- keyspace-consistency
+  "The keyspace's consistency as the node's DESCRIBE shows it (its in-memory
+  metadata), :none if absent, or the error if the read fails."
+  [session]
+  (try (let [stmt (->> (sc/execute session (str "DESCRIBE KEYSPACE " sc-db/keyspace))
+                       (filter #(= "keyspace" (:type %)))
+                       first :create_statement)]
+         (or (second (re-find #"consistency = '(\w+)'" (str stmt))) :none))
+       (catch Exception e (str e))))
 
 (defn- alter-rf!
   "ALTER KEYSPACE to rf in dc, sent once. :ok, :timeout, or the error message."
@@ -501,13 +512,17 @@
                (let [t0 (System/nanoTime)
                      r  (alter-rf! (:session conn) dc to)]
                  {:node node, :from rf, :rf to, :up-normal up-normal, :result r
+                  ; The ALTER has no consistency clause: Scylla must keep it.
+                  :consistency (keyspace-consistency (:session conn))
                   :secs (/ (Math/round (/ (- (System/nanoTime) t0) 1e7)) 100.0)})))
            (finally (sc/close! conn))))
     {:result :no-node-answers}))
 
 (defn rf-package
   "ALTER KEYSPACE replication factor changes between 2 and 4, one step every
-  :interval seconds; the final generator returns RF to 3."
+  :interval seconds; the final generator returns RF to 3. RF 2 with the
+  :remove fault can wedge: removing a replica at RF 2 loses the tablet
+  group's majority. No guard: our mixes don't use remove."
   [opts]
   (when ((:faults opts) :rf)
     {:generator       (gen/stagger (:interval opts nc/default-interval)
