@@ -85,7 +85,7 @@
 
 (def nemeses
   "Types of faults a nemesis can create."
-   #{:pause :kill :restart :partition :clock :decommission :remove :repair :rf})
+   #{:pause :kill :restart :partition :clock :decommission :remove :repair :rf :schema})
 
 (def standard-nemeses
   "Combinations of nemeses for tests"

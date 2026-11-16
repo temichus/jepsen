@@ -485,19 +485,24 @@
          (or (second (re-find #"consistency = '(\w+)'" (str stmt))) :none))
        (catch Exception e (str e))))
 
-(defn- alter-rf!
-  "ALTER KEYSPACE to rf in dc, sent once. :ok, :timeout, or the error message."
-  [session dc rf]
-  (try (sc/execute session
-                   (str "ALTER KEYSPACE " sc-db/keyspace " WITH replication = "
-                        "{'class': 'NetworkTopologyStrategy', '" dc "': " rf "}")
-                   {:read-timeout rf-timeout-ms})
+(defn- execute-once!
+  "Sends stmt once with opts. :ok, :timeout, or the error message."
+  [session stmt opts]
+  (try (sc/execute session stmt opts)
        :ok
        (catch Exception e
          (let [e (if (instance? clojure.lang.ExceptionInfo e) (or (ex-cause e) e) e)]
            (if (instance? com.datastax.driver.core.exceptions.OperationTimedOutException e)
              :timeout
              (.getMessage e))))))
+
+(defn- alter-rf!
+  "ALTER KEYSPACE to rf in dc, sent once. :ok, :timeout, or the error message."
+  [session dc rf]
+  (execute-once! session
+                 (str "ALTER KEYSPACE " sc-db/keyspace " WITH replication = "
+                      "{'class': 'NetworkTopologyStrategy', '" dc "': " rf "}")
+                 {:read-timeout rf-timeout-ms}))
 
 (defn- change-rf!
   "Steps the keyspace's RF via a node whose nodetool status answers, to the
@@ -543,6 +548,96 @@
                                                   {:result (str e)}))))
                         (teardown! [_ _]))
      :perf            #{{:name "rf", :fs #{:rf}, :color "#E9C3A0"}}}))
+
+;; Schema changes
+
+(def decoy
+  "A table :schema creates, writes, truncates and drops beside the workload's."
+  "nemesis_decoy")
+
+(defn schema-steps
+  "The :schema steps that apply, given the nemesis_c column numbers of the
+  workload's table and whether the decoy exists, both from the schema: a
+  timed-out statement may have applied. The table's own columns and data are
+  never touched."
+  [cols decoy?]
+  (concat [:add-column :alter-props]
+          (when (seq cols) [:drop-column])
+          (if decoy? [:write-decoy :truncate-decoy :drop-decoy] [:create-decoy])))
+
+(defn- change-schema!
+  "Runs a random schema-steps step via a node whose nodetool status answers,
+  each statement sent once; the decoy's writes stop at the first that fails.
+  last-col is the highest nemesis_c number added, so no name is reused."
+  [test last-col]
+  (if-let [node (some #(when (status-via test %) %) (shuffle (:nodes test)))]
+    (let [conn (sc/open test node)
+          s    (:session conn)
+          ks   sc-db/keyspace]
+      (try (let [tables (->> (sc/execute s (str "SELECT table_name FROM system_schema.tables"
+                                                " WHERE keyspace_name = '" ks "'"))
+                             (map :table_name)
+                             set)]
+             (if-let [t (first (disj tables decoy))]
+               (let [cols  (->> (sc/execute s (str "SELECT column_name FROM system_schema.columns"
+                                                   " WHERE keyspace_name = '" ks "'"
+                                                   " AND table_name = '" t "'"))
+                                (keep #(some->> (re-find #"^nemesis_c(\d+)$" (:column_name %))
+                                                second
+                                                Long/parseLong)))
+                     step  (rand-nth (schema-steps cols (contains? tables decoy)))
+                     t     (str ks "." t)
+                     d     (str ks "." decoy)
+                     stmts (case step
+                             :add-column     [(str "ALTER TABLE " t " ADD nemesis_c"
+                                                   (swap! last-col #(inc (apply max % cols))) " int")]
+                             :drop-column    [(str "ALTER TABLE " t " DROP nemesis_c" (rand-nth cols))]
+                             :alter-props    [(str "ALTER TABLE " t " WITH comment = 'nemesis "
+                                                   (System/currentTimeMillis) "'")]
+                             :create-decoy   [(str "CREATE TABLE IF NOT EXISTS " d
+                                                   " (pk int PRIMARY KEY, v int)")]
+                             :write-decoy    (for [pk (range 10)]
+                                               (str "INSERT INTO " d " (pk, v) VALUES ("
+                                                    pk ", " (rand-int 1000) ")"))
+                             :truncate-decoy [(str "TRUNCATE " d)]
+                             :drop-decoy     [(str "DROP TABLE " d)])
+                     opts  (if (= :write-decoy step)
+                             (sc/write-opts test)
+                             {:read-timeout rf-timeout-ms})
+                     t0    (System/nanoTime)
+                     r     (reduce (fn [_ stmt]
+                                     (let [r (execute-once! s stmt opts)]
+                                       (if (= :ok r) r (reduced r))))
+                                   :ok stmts)]
+                 (cond-> {:node node, :step step, :stmt (str/join "; " stmts), :result r
+                          :secs (/ (Math/round (/ (- (System/nanoTime) t0) 1e7)) 100.0)}
+                   (#{:add-column :drop-column :alter-props} step)
+                   (assoc :consistency (keyspace-consistency s))))
+               {:node node, :result :no-table}))
+           (finally (sc/close! conn))))
+    {:result :no-node-answers}))
+
+(defn schema-package
+  "Schema changes under load every :interval seconds: ALTERs of the workload's
+  table (add or drop a nemesis_c column, change its comment), and a decoy
+  table in the same keyspace created, written, truncated and dropped."
+  [opts]
+  (when ((:faults opts) :schema)
+    (let [last-col (atom 0)]
+      {:generator (gen/stagger (:interval opts nc/default-interval)
+                               (fn [_ _] {:type :info, :f :schema}))
+       :nemesis   (reify
+                    n/Reflection
+                    (fs [_] #{:schema})
+                    n/Nemesis
+                    (setup! [this _] this)
+                    (invoke! [_ test op]
+                      ; Neither a dead node nor a failed statement may crash the test.
+                      (assoc op :value (try (change-schema! test last-col)
+                                            (catch Exception e
+                                              {:result (str e)}))))
+                    (teardown! [_ _]))
+       :perf      #{{:name "schema", :fs #{:schema}, :color "#A0B8E9"}}})))
 
 (defn- down-members
   "Members other than except whose scylla unit isn't active."
@@ -918,7 +1013,7 @@
         ; Membership after the others: its final re-adds must follow their
         ; heals. RF last, back to 3 on the healed cluster.
         pkg (->> (concat (nc/nemesis-packages opts)
-                         [(restart-package opts) membership (rf-package opts)])
+                         [(restart-package opts) membership (schema-package opts) (rf-package opts)])
                  (remove nil?)
                  nc/compose-packages
                  ;periodically-recover

@@ -170,3 +170,11 @@
     (is (= #{3} (steps 2 3)) "a 3-node cluster still goes 2 <-> 3")
     (is (= #{3} (steps 4 2)) "lowers by one even far above the bound")
     (is (= #{nil} (steps 2 2)))))
+
+(deftest schema-steps-follow-schema
+  (is (= #{:add-column :alter-props :create-decoy} (set (n/schema-steps [] false))))
+  (is (= #{:add-column :alter-props :drop-column :create-decoy}
+         (set (n/schema-steps [1 3] false))))
+  (testing "the decoy step follows whether it exists"
+    (is (= #{:add-column :alter-props :write-decoy :truncate-decoy :drop-decoy}
+           (set (n/schema-steps [] true))))))
